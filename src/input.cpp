@@ -14,6 +14,7 @@ void InputManager::init() {
     _pendingEvent = KEY_NONE;
     _upLastReleaseTime = 0;
     _downLastReleaseTime = 0;
+    _menuLastReleaseTime = 0;
 }
 
 int InputManager::readPinSafe(int pin) {
@@ -38,7 +39,13 @@ void InputManager::update() {
         _menuPressed = false;
         unsigned long duration = now - _menuPressTime;
         if (duration > KEY_DEBOUNCE_MS && duration < KEY_LONGPRESS_MS) {
-            _pendingEvent = KEY_MENU_SHORT;
+            // 检查是否是双击
+            if (now - _menuLastReleaseTime < KEY_DOUBLECLICK_MS) {
+                _pendingEvent = KEY_MENU_DOUBLE;
+            } else {
+                _pendingEvent = KEY_MENU_SHORT;
+            }
+            _menuLastReleaseTime = now;
         }
         // 长按不处理（硬件功能）
     }

@@ -751,7 +751,7 @@ void ChatManager::drawInputKeyboard() {
     }
     
     // 底部状态栏
-    disp.drawStatusBar("首字母/全拼 长按键2:发送 长按键3:确认", nullptr);
+    disp.drawStatusBar("短按1:删字 双击1:退出 长按键2:发送", nullptr);
     disp.refresh(true);
 }
 
@@ -1012,9 +1012,32 @@ void ChatManager::confirmCandidate() {
 void ChatManager::handleKey(KeyEvent evt) {
     if (!_active || evt == KEY_NONE) return;
     if (evt == KEY_MENU_SHORT) {
+        // 在输入模式下，短按按键1 = 删除上一个字母
+        if (_inputMode != INPUT_NONE) {
+            if (_pinyinLen > 0) {
+                deletePinyin();
+                drawInputKeyboard();
+            } else if (_inputBufferLen > 0) {
+                _inputBufferLen--;
+                _inputBuffer[_inputBufferLen] = 0;
+                drawInputKeyboard();
+            }
+            return;
+        }
         exit();
         app.goHome();
         return;
+    }
+    if (evt == KEY_MENU_DOUBLE) {
+        // 双击按键1 = 退出输入模式
+        if (_inputMode != INPUT_NONE) {
+            _inputMode = INPUT_NONE;
+            _pinyinLen = 0;
+            _pinyin[0] = 0;
+            currentCandidateCount = 0;
+            drawChatView();
+            return;
+        }
     }
     if (_view == CHAT_VIEW_LIST) {
         if (evt == KEY_UP_SHORT) {
