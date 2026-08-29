@@ -1,0 +1,90 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install platformio
+    
+    - name: Build firmware
+      run: |
+        pio run
+    
+    - name: Generate merged 4MB binary
+      run: |
+        python3 << 'EOF'
+        fw_path = '.pio/build/nodemcuv2/firmware.bin'
+        out_path = 'VoidTerminal-OS_latest_4MB_DIO.bin'
+        
+        with open(fw_path, 'rb') as f:
+            data = f.read()
+        
+        flash_size = 4 * 1024 * 1024
+        full_image = bytearray([0xFF] * flash_size)
+        full_image[0:len(data)] = data
+        
+        with open(out_path, 'wb') as f:
+            f.write(full_image)
+        
+        print(f'Firmware size: {len(data)} bytes')
+        print(f'Merged image: {len(full_image)} bytes')
+        EOF
+    
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: VoidTerminal-OS-firmware
+        path: |
+          .pio/build/nodemcuv2/firmware.bin
+          VoidTerminal-OS_latest_4MB_DIO.bin
+        retention-days: 30
+    
+    - name: Get version info
+      id: version
+      run: |
+        echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        echo "date=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v2
+      with:
+        name: VoidTerminal-OS ${{ steps.version.outputs.date }}
+        tag_name: v${{ steps.version.outputs.date }}
+        body: |
+          ## VoidTerminal-OS 固件
+          
+          - 编译时间: ${{ steps.version.outputs.date }}
+          - Commit: ${{ steps.version.outputs.sha_short }}
+          - 硬件: ESP8266 (ESP-12F) + A01 墨水屏
+          - Flash: 4MB, DIO, 80MHz
+          
+          ### 烧录方法
+          ```bash
+          esptool.py --port COMx --baud 115200 write_flash \
+            --flash_size=4MB -fm dio 0x0 VoidTerminal-OS_latest_4MB_DIO.bin
+          ```
+        files: |
+          VoidTerminal-OS_latest_4MB_DIO.bin
+          .pio/build/nodemcuv2/firmware.bin
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
