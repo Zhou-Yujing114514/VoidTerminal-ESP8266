@@ -13,11 +13,6 @@ struct PinyinCandidate {
     const char* candidates[8];
 };
 
-struct PinyinCandidate {
-    const char* pinyin;
-    const char* candidates[8];
-};
-
 // 全拼单字词库
 const PinyinCandidate candidateTable[] = {
     {"a", {"啊", "阿", "呵", "嗄", "腌", "锕", "啊", "阿"}},
