@@ -1,0 +1,28 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+libdeps/
+*.elf
+*.bin
+!VoidTerminal-OS_*.bin
+
+# Build artifacts
+build/
+*.o
+*.a
+*.hex
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
