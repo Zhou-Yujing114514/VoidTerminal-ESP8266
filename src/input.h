@@ -6,7 +6,8 @@
 // 按键事件类型
 enum KeyEvent {
     KEY_NONE = 0,
-    KEY_MENU_SHORT,    // 按键1短按 - 回主页
+    KEY_MENU_SHORT,    // 按键1短按 - 回主页/删除
+    KEY_MENU_DOUBLE,   // 按键1双击 - 退出输入
     KEY_UP_SHORT,      // 按键2短按
     KEY_UP_LONG,       // 按键2长按
     KEY_UP_DOUBLE,     // 按键2双击
@@ -31,6 +32,7 @@ private:
     unsigned long _downPressTime;
     unsigned long _upLastReleaseTime;
     unsigned long _downLastReleaseTime;
+    unsigned long _menuLastReleaseTime;
     bool _menuPressed;
     bool _upPressed;
     bool _downPressed;
