@@ -22,9 +22,27 @@ void setup() {
     delay(100);
     Serial.println("\n\nVoidTerminal-OS 启动中...");
     Serial.printf("版本: %s\n", FW_VERSION);
+    Serial.printf("屏幕引脚: CS=%d DC=%d RST=%d BUSY=%d\n", EPD_CS, EPD_DC, EPD_RST, EPD_BUSY);
+    Serial.printf("按键引脚: MENU=%d UP=%d DOWN=%d\n", KEY_MENU, KEY_UP, KEY_DOWN);
     
-    // 初始化各个模块
+    // 初始化屏幕
+    Serial.println("初始化屏幕...");
     disp.init();
+    Serial.println("屏幕初始化完成");
+    
+    // 显示启动测试画面
+    disp.clear();
+    disp.drawTitleBar("VoidTerminal-OS");
+    disp.drawText(10, 30, "系统启动中...", 2);
+    disp.drawText(10, 55, "版本: v2.1", 1);
+    disp.drawText(10, 70, "屏幕: 2.9寸 A01", 1);
+    disp.drawText(10, 85, "如果看到此画面,", 1);
+    disp.drawText(10, 100, "说明屏幕驱动正常!", 1);
+    disp.drawStatusBar("初始化", "v2.1");
+    disp.refresh(true);
+    Serial.println("启动画面已显示");
+    
+    // 初始化其他模块
     input.init();
     app.init();
     chat.init();
@@ -38,7 +56,6 @@ void setup() {
         Serial.println("WiFi 已连接");
     } else {
         Serial.println("尝试连接预设 WiFi...");
-        // 不阻塞，在后台连接
     }
     
     Serial.println("启动完成!");

@@ -2,10 +2,18 @@
 
 InputManager input;
 
+// 跟踪冲突引脚的原始状态
+static bool epdDcOriginalLevel = true;  // DC 默认高电平
+static bool sdCsOriginalLevel = true;   // CS 默认高电平（未选中）
+
 void InputManager::init() {
+    // 按键1（Menu）- GPIO12，无冲突，正常初始化
     pinMode(KEY_MENU, INPUT_PULLUP);
-    pinMode(KEY_UP, INPUT_PULLUP);
-    pinMode(KEY_DOWN, INPUT_PULLUP);
+    
+    // 按键2（Up）- GPIO0，与 EPD_DC 冲突，不在此初始化
+    // 按键3（Down）- GPIO5，与 SD_CS 冲突，不在此初始化
+    // 这两个引脚在 readPinSafe 中临时切换模式
+    
     _menuPressed = false;
     _upPressed = false;
     _downPressed = false;
@@ -18,13 +26,47 @@ void InputManager::init() {
 }
 
 int InputManager::readPinSafe(int pin) {
-    // 读取引脚，多次采样防抖
+    // 判断是否是冲突引脚
+    bool isEpdDc = (pin == EPD_DC);
+    bool isSdCs = (pin == SD_CS);
+    bool isConflict = isEpdDc || isSdCs;
+    
+    if (isConflict) {
+        // 保存当前引脚电平（在切换为输入前读取）
+        // 注意：digitalRead 在输出模式下也能读取到当前输出电平
+        int originalLevel = digitalRead(pin);
+        if (isEpdDc) epdDcOriginalLevel = (originalLevel == HIGH);
+        if (isSdCs) sdCsOriginalLevel = (originalLevel == HIGH);
+        
+        // 临时切换为输入上拉模式
+        pinMode(pin, INPUT_PULLUP);
+        // 等待电平稳定
+        delayMicroseconds(50);
+    }
+    
+    // 多次采样防抖
     int sum = 0;
     for (int i = 0; i < 5; i++) {
         sum += digitalRead(pin);
         delayMicroseconds(100);
     }
-    return (sum > 2) ? HIGH : LOW;
+    int result = (sum > 2) ? HIGH : LOW;
+    
+    if (isConflict) {
+        // 恢复为输出模式
+        pinMode(pin, OUTPUT);
+        // 恢复原来的电平
+        if (isEpdDc) {
+            digitalWrite(pin, epdDcOriginalLevel ? HIGH : LOW);
+        }
+        if (isSdCs) {
+            digitalWrite(pin, sdCsOriginalLevel ? HIGH : LOW);
+        }
+        // 等待电平稳定
+        delayMicroseconds(20);
+    }
+    
+    return result;
 }
 
 void InputManager::update() {
