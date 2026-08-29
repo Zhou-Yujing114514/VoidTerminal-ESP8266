@@ -269,28 +269,87 @@ void ChatManager::drawChatView() {
 void ChatManager::drawInputKeyboard() {
     disp.clear();
     disp.drawTitleBar("输入消息");
+    
+    // 左右分屏：左边输入框(110px)，右边九宫格(186px)
+    int leftW = 110;
+    int rightX = leftW;
+    int rightW = SCREEN_W - leftW;
+    int contentY = 16;
+    int contentH = SCREEN_H - 16 - 14; // 减去标题栏和状态栏
+    
+    // ===== 左边：输入框区域 =====
+    // 候选词栏
+    int candY = contentY;
+    int candH = 32;
+    disp.drawRect(0, candY, leftW, candH, false);
     if (_pinyinLen > 0 && currentCandidateCount > 0) {
-        disp.drawRect(0, 16, SCREEN_W, 14, false);
-        char candLine[100];
+        char candLine[80];
         int pos = 0;
-        for (int i = 0; i < currentCandidateCount && pos < 90; i++) {
+        for (int i = 0; i < currentCandidateCount && pos < 70; i++) {
             if (i == _candidateIndex) candLine[pos++] = '[';
             const char* cand = currentCandidates[i];
-            while (*cand && pos < 85) candLine[pos++] = *cand++;
+            while (*cand && pos < 65) candLine[pos++] = *cand++;
             if (i == _candidateIndex) candLine[pos++] = ']';
             candLine[pos++] = ' ';
         }
         candLine[pos] = 0;
-        disp.drawText(2, 18, candLine, 1);
+        disp.drawText(2, candY + 2, _pinyin, 1);
+        disp.drawText(2, candY + 14, candLine, 1);
+    } else {
+        disp.drawText(2, candY + 10, "选字母组词", 1);
     }
-    int keyW = SCREEN_W / 3;
-    int keyH = (SCREEN_H - 30 - 14 - 16) / 3;
-    int startY = 32;
+    
+    // 已输入文字区域
+    int inputY = candY + candH + 2;
+    int inputH = contentH - candH - 2 - 30; // 减去发送按钮高度
+    disp.drawRect(0, inputY, leftW, inputH, false);
+    if (_inputBufferLen > 0) {
+        // 简单换行显示已输入文字
+        char line[20];
+        int lineIdx = 0;
+        int y = inputY + 2;
+        for (int i = 0; i < _inputBufferLen && y < inputY + inputH - 10; i++) {
+            line[lineIdx++] = _inputBuffer[i];
+            if (lineIdx >= 12 || _inputBuffer[i] == '\n') {
+                line[lineIdx] = 0;
+                disp.drawText(2, y, line, 1);
+                y += 10;
+                lineIdx = 0;
+            }
+        }
+        if (lineIdx > 0 && y < inputY + inputH - 10) {
+            line[lineIdx] = 0;
+            disp.drawText(2, y, line, 1);
+        }
+    } else {
+        disp.drawText(2, inputY + 10, "已输入:", 1);
+    }
+    
+    // 发送按钮
+    int sendY = inputY + inputH + 2;
+    int sendH = 26;
+    bool canSend = (_inputBufferLen > 0);
+    if (canSend) {
+        disp.drawRect(2, sendY, leftW - 4, sendH, true);
+        display.setTextColor(COLOR_WHITE);
+        disp.drawText(leftW/2 - 12, sendY + 8, "发送", 2);
+        display.setTextColor(COLOR_BLACK);
+    } else {
+        disp.drawRect(2, sendY, leftW - 4, sendH, false);
+        disp.drawText(leftW/2 - 12, sendY + 8, "发送", 2);
+    }
+    
+    // ===== 右边：九宫格键盘 =====
+    int keyW = rightW / 3;
+    int keyH = contentH / 3;
+    int startY = contentY;
+    
     for (int i = 0; i < 9; i++) {
         int col = i % 3;
         int row = i / 3;
-        int x = col * keyW;
+        int x = rightX + col * keyW;
         int y = startY + row * keyH;
+        
         bool selected = (i == _gridCursor);
         if (selected) {
             disp.drawRect(x + 2, y + 2, keyW - 4, keyH - 4, true);
@@ -298,18 +357,16 @@ void ChatManager::drawInputKeyboard() {
         } else {
             disp.drawRect(x + 2, y + 2, keyW - 4, keyH - 4, false);
         }
+        
         char numStr[2] = {(char)('1' + i), 0};
         disp.drawText(x + 4, y + 4, numStr, 1);
         disp.drawText(x + 4, y + 16, gridLetters[i], 1);
+        
         if (selected) display.setTextColor(COLOR_BLACK);
     }
-    int funcY = SCREEN_H - 14;
-    disp.drawRect(0, funcY, SCREEN_W / 3, 14, false);
-    disp.drawText(4, funcY + 2, "删除", 1);
-    disp.drawRect(SCREEN_W / 3, funcY, SCREEN_W / 3, 14, false);
-    disp.drawText(SCREEN_W / 3 + 4, funcY + 2, "空格", 1);
-    disp.drawRect(SCREEN_W * 2 / 3, funcY, SCREEN_W / 3, 14, false);
-    disp.drawText(SCREEN_W * 2 / 3 + 4, funcY + 2, "退出", 1);
+    
+    // 底部状态栏
+    disp.drawStatusBar("长按键2:发送 长按键3:确认 短按键1:退出", nullptr);
     disp.refresh(true);
 }
 
@@ -601,6 +658,23 @@ void ChatManager::handleKey(KeyEvent evt) {
                 if (_gridCursor < 6) _gridCursor += 3;
                 drawInputKeyboard();
             } else if (evt == KEY_UP_LONG) {
+                // 长按按键2：发送消息
+                if (_inputBufferLen > 0) {
+                    Conversation* conv = getCurrentConversation();
+                    if (conv) {
+                        sendWsMessage("message", conv->id, _inputBuffer);
+                        addMessage(_userId, _userName, _inputBuffer, true);
+                    }
+                    _inputBufferLen = 0;
+                    _inputBuffer[0] = 0;
+                    _pinyinLen = 0;
+                    _pinyin[0] = 0;
+                    currentCandidateCount = 0;
+                    _inputMode = INPUT_NONE;
+                    drawChatView();
+                }
+            } else if (evt == KEY_UP_DOUBLE) {
+                // 双击按键2：切换候选词
                 if (currentCandidateCount > 0) {
                     _candidateIndex = (_candidateIndex + 1) % currentCandidateCount;
                     drawInputKeyboard();
