@@ -1,11 +1,22 @@
 #include "chat.h"
+#include <pgmspace.h>
 
 ChatManager chat;
 
-const char* gridLetters[9] = {
-    ".,!?", "abc", "def",
-    "ghi", "jkl", "mno",
-    "pqrs", "tuv", "wxyz"
+const char gridLetters_0[] PROGMEM = ".,!?";
+const char gridLetters_1[] PROGMEM = "abc";
+const char gridLetters_2[] PROGMEM = "def";
+const char gridLetters_3[] PROGMEM = "ghi";
+const char gridLetters_4[] PROGMEM = "jkl";
+const char gridLetters_5[] PROGMEM = "mno";
+const char gridLetters_6[] PROGMEM = "pqrs";
+const char gridLetters_7[] PROGMEM = "tuv";
+const char gridLetters_8[] PROGMEM = "wxyz";
+
+const char* const gridLetters[9] PROGMEM = {
+    gridLetters_0, gridLetters_1, gridLetters_2,
+    gridLetters_3, gridLetters_4, gridLetters_5,
+    gridLetters_6, gridLetters_7, gridLetters_8
 };
 
 struct PinyinCandidate {
@@ -14,7 +25,7 @@ struct PinyinCandidate {
 };
 
 // 全拼单字词库
-const PinyinCandidate candidateTable[] = {
+const PinyinCandidate candidateTable[] PROGMEM = {
     {"a", {"啊", "阿", "呵", "嗄", "腌", "锕", "啊", "阿"}},
     {"ai", {"爱", "哎", "唉", "矮", "艾", "挨", "癌", "蔼"}},
     {"an", {"安", "按", "暗", "岸", "案", "俺", "铵", "胺"}},
@@ -740,7 +751,7 @@ void ChatManager::drawInputKeyboard() {
         
         char numStr[2] = {(char)('1' + i), 0};
         disp.drawText(x + 4, y + 4, numStr, 1);
-        disp.drawText(x + 4, y + 16, gridLetters[i], 1);
+        disp.drawText(x + 4, y + 16, getGridLetters(i), 1);
         
         if (selected) display.setTextColor(COLOR_BLACK);
     }
@@ -753,7 +764,7 @@ void ChatManager::drawInputKeyboard() {
 void ChatManager::drawLetterSelector() {
     disp.clear();
     disp.drawTitleBar("选择字母");
-    const char* letters = gridLetters[_gridCursor];
+    const char* letters = getGridLetters(_gridCursor);
     int count = strlen(letters);
     int boxW = SCREEN_W / count;
     for (int i = 0; i < count; i++) {
@@ -911,7 +922,12 @@ bool ChatManager::login(const char* username, const char* password) {
 }
 
 const char* ChatManager::getGridLetters(int index) {
-    if (index >= 0 && index < 9) return gridLetters[index];
+    static char buf[8];
+    if (index >= 0 && index < 9) {
+        const char* str = (const char*)pgm_read_ptr(&gridLetters[index]);
+        strcpy(buf, str);
+        return buf;
+    }
     return "";
 }
 
@@ -937,11 +953,22 @@ void ChatManager::loadCandidates() {
     
     if (_pinyinLen == 0) return;
     
+    static char candidateBuffer[8][32];
+    char pinyinBuf[16];
+    char candBuf[32];
+    
     // 1. 先尝试全拼精确匹配
     for (unsigned int i = 0; i < CANDIDATE_TABLE_SIZE && currentCandidateCount < 8; i++) {
-        if (strcmp(candidateTable[i].pinyin, _pinyin) == 0) {
-            for (int j = 0; j < 8 && candidateTable[i].candidates[j] && currentCandidateCount < 8; j++) {
-                currentCandidates[currentCandidateCount++] = candidateTable[i].candidates[j];
+        const char* pinyin = (const char*)pgm_read_ptr(&candidateTable[i].pinyin);
+        strcpy(pinyinBuf, pinyin);
+        if (strcmp(pinyinBuf, _pinyin) == 0) {
+            for (int j = 0; j < 8 && currentCandidateCount < 8; j++) {
+                const char* cand = (const char*)pgm_read_ptr(&candidateTable[i].candidates[j]);
+                if (!cand) break;
+                strcpy(candBuf, cand);
+                strcpy(candidateBuffer[currentCandidateCount], candBuf);
+                currentCandidates[currentCandidateCount] = candidateBuffer[currentCandidateCount];
+                currentCandidateCount++;
             }
             break;
         }
@@ -950,19 +977,26 @@ void ChatManager::loadCandidates() {
     // 2. 如果全拼没匹配到，或者输入只有1个字母（首字母模式），尝试首字母匹配
     if (currentCandidateCount == 0 || _pinyinLen == 1) {
         for (unsigned int i = 0; i < CANDIDATE_TABLE_SIZE && currentCandidateCount < 8; i++) {
+            const char* pinyin = (const char*)pgm_read_ptr(&candidateTable[i].pinyin);
+            strcpy(pinyinBuf, pinyin);
             // 检查拼音是否以输入的首字母开头
-            if (strncmp(candidateTable[i].pinyin, _pinyin, _pinyinLen) == 0) {
-                for (int j = 0; j < 8 && candidateTable[i].candidates[j] && currentCandidateCount < 8; j++) {
+            if (strncmp(pinyinBuf, _pinyin, _pinyinLen) == 0) {
+                for (int j = 0; j < 8 && currentCandidateCount < 8; j++) {
+                    const char* cand = (const char*)pgm_read_ptr(&candidateTable[i].candidates[j]);
+                    if (!cand) break;
+                    strcpy(candBuf, cand);
                     // 避免重复
                     bool exists = false;
                     for (int k = 0; k < currentCandidateCount; k++) {
-                        if (strcmp(currentCandidates[k], candidateTable[i].candidates[j]) == 0) {
+                        if (strcmp(currentCandidates[k], candBuf) == 0) {
                             exists = true;
                             break;
                         }
                     }
                     if (!exists) {
-                        currentCandidates[currentCandidateCount++] = candidateTable[i].candidates[j];
+                        strcpy(candidateBuffer[currentCandidateCount], candBuf);
+                        currentCandidates[currentCandidateCount] = candidateBuffer[currentCandidateCount];
+                        currentCandidateCount++;
                     }
                 }
             }
@@ -971,7 +1005,8 @@ void ChatManager::loadCandidates() {
     
     // 3. 如果还是没有，显示拼音本身
     if (currentCandidateCount == 0) {
-        currentCandidates[0] = _pinyin;
+        strcpy(candidateBuffer[0], _pinyin);
+        currentCandidates[0] = candidateBuffer[0];
         currentCandidateCount = 1;
     }
 }
@@ -1124,7 +1159,7 @@ void ChatManager::handleKey(KeyEvent evt) {
                 drawLetterSelector();
             }
         } else if (_inputMode == INPUT_LETTER) {
-            const char* letters = gridLetters[_gridCursor];
+            const char* letters = getGridLetters(_gridCursor);
             int count = strlen(letters);
             if (evt == KEY_UP_SHORT) {
                 _inputMode = INPUT_GRID;
