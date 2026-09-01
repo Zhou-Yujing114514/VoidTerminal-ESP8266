@@ -5,7 +5,7 @@
 libdeps/
 *.elf
 *.bin
-!VoidTerminal-OS_*.bin
+!VoidTerminal-ESP8266_*.bin
 
 # Build artifacts
 build/

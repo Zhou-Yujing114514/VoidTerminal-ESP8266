@@ -9,7 +9,7 @@
 
 // ===== 版本信息 =====
 #define FW_VERSION "2.2.0"
-#define FW_NAME "VoidTerminal-OS"
+#define FW_NAME "VoidTerminal-ESP8266"
 
 // ===== 引脚配置 (A01 墨水屏 + ESP-12F) =====
 #define EPD_CS    15
