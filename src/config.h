@@ -40,8 +40,8 @@
 
 // ===== 存储配置 =====
 #define EEPROM_SIZE 512
-#define MAX_CHAT_CACHE 50
-#define MAX_READER_BUFFER 2048
+#define MAX_CHAT_CACHE 20
+#define MAX_READER_BUFFER 1024
 
 // ===== 按键时长 =====
 #define KEY_DEBOUNCE_MS 50
