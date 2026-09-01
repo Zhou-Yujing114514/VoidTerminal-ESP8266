@@ -20,7 +20,7 @@ void DisplayManager::init() {
     u8g2Fonts.setFontDirection(0);
     u8g2Fonts.setForegroundColor(GxEPD_BLACK);
     u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
-    u8g2Fonts.setFont(u8g2_font_wqy14_t_gb2312a); // 文泉驿14号，一级常用汉字
+    u8g2Fonts.setFont(u8g2_font_wqy14_t_chinese2); // 文泉驿14号，常用字子集(~16KB)
     
     _needFullRefresh = true;
     _currentFontSize = 1;
@@ -45,21 +45,9 @@ void DisplayManager::drawText(int x, int y, const char* text, int size) {
     // u8g2 的 y 是基线位置，需要加上字体高度
     int baselineY = y + FONT_HEIGHT - 2;
     
-    // size >= 2 时用更大的字体
-    if (size >= 2) {
-        u8g2Fonts.setFont(u8g2_font_wqy16_t_gb2312a);
-        baselineY = y + 16 - 2;
-    } else {
-        u8g2Fonts.setFont(u8g2_font_wqy14_t_gb2312a);
-    }
-    
+    // 目前只用 wqy14 字体，size 参数暂时忽略（内存限制无法加载多字体）
     u8g2Fonts.setCursor(x, baselineY);
     u8g2Fonts.print(text);
-    
-    // 恢复默认字体
-    if (size >= 2) {
-        u8g2Fonts.setFont(u8g2_font_wqy14_t_gb2312a);
-    }
 }
 
 void DisplayManager::drawText_P(int x, int y, const char* text, int size) {
