@@ -2,10 +2,6 @@
 
 InputManager input;
 
-// 跟踪冲突引脚的原始状态
-static bool epdDcOriginalLevel = true;  // DC 默认高电平
-static bool sdCsOriginalLevel = true;   // CS 默认高电平（未选中）
-
 void InputManager::init() {
     // 按键1（Menu）- GPIO12，无冲突，正常初始化
     pinMode(KEY_MENU, INPUT_PULLUP);
@@ -23,47 +19,34 @@ void InputManager::init() {
     _upLastReleaseTime = 0;
     _downLastReleaseTime = 0;
     _menuLastReleaseTime = 0;
+    
+    Serial.println("InputManager: 按键初始化完成");
+    Serial.printf("  KEY_MENU=GPIO%d, KEY_UP=GPIO%d, KEY_DOWN=GPIO%d\n", KEY_MENU, KEY_UP, KEY_DOWN);
 }
 
 int InputManager::readPinSafe(int pin) {
     // 判断是否是冲突引脚
-    bool isEpdDc = (pin == EPD_DC);
-    bool isSdCs = (pin == SD_CS);
-    bool isConflict = isEpdDc || isSdCs;
+    bool isConflict = (pin == EPD_DC) || (pin == SD_CS);
     
     if (isConflict) {
-        // 保存当前引脚电平（在切换为输入前读取）
-        // 注意：digitalRead 在输出模式下也能读取到当前输出电平
-        int originalLevel = digitalRead(pin);
-        if (isEpdDc) epdDcOriginalLevel = (originalLevel == HIGH);
-        if (isSdCs) sdCsOriginalLevel = (originalLevel == HIGH);
-        
         // 临时切换为输入上拉模式
         pinMode(pin, INPUT_PULLUP);
-        // 等待电平稳定
-        delayMicroseconds(50);
+        delayMicroseconds(200); // 等待电平稳定
     }
     
-    // 多次采样防抖
+    // 多次采样防抖（10次采样，超过5次为高则高）
     int sum = 0;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) {
         sum += digitalRead(pin);
-        delayMicroseconds(100);
+        delayMicroseconds(200);
     }
-    int result = (sum > 2) ? HIGH : LOW;
+    int result = (sum > 5) ? HIGH : LOW;
     
     if (isConflict) {
-        // 恢复为输出模式
+        // 恢复为输出高电平（CS 和 DC 空闲时都是高电平）
         pinMode(pin, OUTPUT);
-        // 恢复原来的电平
-        if (isEpdDc) {
-            digitalWrite(pin, epdDcOriginalLevel ? HIGH : LOW);
-        }
-        if (isSdCs) {
-            digitalWrite(pin, sdCsOriginalLevel ? HIGH : LOW);
-        }
-        // 等待电平稳定
-        delayMicroseconds(20);
+        digitalWrite(pin, HIGH);
+        delayMicroseconds(100);
     }
     
     return result;
@@ -81,7 +64,6 @@ void InputManager::update() {
         _menuPressed = false;
         unsigned long duration = now - _menuPressTime;
         if (duration > KEY_DEBOUNCE_MS && duration < KEY_LONGPRESS_MS) {
-            // 检查是否是双击
             if (now - _menuLastReleaseTime < KEY_DOUBLECLICK_MS) {
                 _pendingEvent = KEY_MENU_DOUBLE;
             } else {
@@ -89,7 +71,6 @@ void InputManager::update() {
             }
             _menuLastReleaseTime = now;
         }
-        // 长按不处理（硬件功能）
     }
     
     // 按键2（Up）- 短按/长按/双击
@@ -102,7 +83,6 @@ void InputManager::update() {
         _upPressed = false;
         unsigned long duration = now - _upPressTime;
         if (duration > KEY_DEBOUNCE_MS && !_upLongFired) {
-            // 检查是否是双击
             if (now - _upLastReleaseTime < KEY_DOUBLECLICK_MS) {
                 _pendingEvent = KEY_UP_DOUBLE;
             } else {
@@ -123,14 +103,18 @@ void InputManager::update() {
         _downPressed = true;
         _downPressTime = now;
         _downLongFired = false;
+        Serial.println("KEY_DOWN 按下!");
     } else if (downState == HIGH && _downPressed) {
         _downPressed = false;
         unsigned long duration = now - _downPressTime;
+        Serial.printf("KEY_DOWN 释放, 时长=%lu\n", duration);
         if (duration > KEY_DEBOUNCE_MS && !_downLongFired) {
             if (now - _downLastReleaseTime < KEY_DOUBLECLICK_MS) {
                 _pendingEvent = KEY_DOWN_DOUBLE;
+                Serial.println("KEY_DOWN 双击事件!");
             } else {
                 _pendingEvent = KEY_DOWN_SHORT;
+                Serial.println("KEY_DOWN 短按事件!");
             }
             _downLastReleaseTime = now;
         }
@@ -138,6 +122,7 @@ void InputManager::update() {
         if (now - _downPressTime > KEY_LONGPRESS_MS) {
             _downLongFired = true;
             _pendingEvent = KEY_DOWN_LONG;
+            Serial.println("KEY_DOWN 长按事件!");
         }
     }
 }
