@@ -35,7 +35,7 @@ jobs:
       run: |
         python3 << 'EOF'
         fw_path = '.pio/build/nodemcuv2/firmware.bin'
-        out_path = 'VoidTerminal-OS_latest_4MB_DIO.bin'
+        out_path = 'VoidTerminal-ESP8266_latest_4MB_DIO.bin'
         
         with open(fw_path, 'rb') as f:
             data = f.read()
@@ -54,10 +54,10 @@ jobs:
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
       with:
-        name: VoidTerminal-OS-firmware
+        name: VoidTerminal-ESP8266-firmware
         path: |
           .pio/build/nodemcuv2/firmware.bin
-          VoidTerminal-OS_latest_4MB_DIO.bin
+          VoidTerminal-ESP8266_latest_4MB_DIO.bin
         retention-days: 30
     
     - name: Get version info
@@ -70,10 +70,10 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v2
       with:
-        name: VoidTerminal-OS ${{ steps.version.outputs.date }}
+        name: VoidTerminal-ESP8266 ${{ steps.version.outputs.date }}
         tag_name: v${{ steps.version.outputs.date }}
         body: |
-          ## VoidTerminal-OS 固件
+          ## VoidTerminal-ESP8266 固件
           
           - 编译时间: ${{ steps.version.outputs.date }}
           - Commit: ${{ steps.version.outputs.sha_short }}
@@ -83,10 +83,10 @@ jobs:
           ### 烧录方法
           ```bash
           esptool.py --port COMx --baud 115200 write_flash \
-            --flash_size=4MB -fm dio 0x0 VoidTerminal-OS_latest_4MB_DIO.bin
+            --flash_size=4MB -fm dio 0x0 VoidTerminal-ESP8266_latest_4MB_DIO.bin
           ```
         files: |
-          VoidTerminal-OS_latest_4MB_DIO.bin
+          VoidTerminal-ESP8266_latest_4MB_DIO.bin
           .pio/build/nodemcuv2/firmware.bin
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,5 @@
 /*
- * VoidTerminal-OS - 虚空终端 ESP8266 自研操作系统
+ * VoidTerminal-ESP8266 - 虚空终端 ESP8266 自研操作系统
  * 硬件: ESP-12F / 4MB Flash / DIO / 80MHz
  * 屏幕: 2.9寸 A01 墨水屏 (296x128)
  * 功能: 虚空终端聊天(九宫格输入法)、服务器监控、TXT阅读器、时钟、配网系统
@@ -20,7 +20,7 @@
 void setup() {
     Serial.begin(115200);
     delay(100);
-    Serial.println("\n\nVoidTerminal-OS 启动中...");
+    Serial.println("\n\nVoidTerminal-ESP8266 启动中...");
     Serial.printf("版本: %s\n", FW_VERSION);
     Serial.printf("屏幕引脚: CS=%d DC=%d RST=%d BUSY=%d\n", EPD_CS, EPD_DC, EPD_RST, EPD_BUSY);
     Serial.printf("按键引脚: MENU=%d UP=%d DOWN=%d\n", KEY_MENU, KEY_UP, KEY_DOWN);
