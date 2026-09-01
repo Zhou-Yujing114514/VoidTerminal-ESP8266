@@ -8,7 +8,7 @@
 #include <SD.h>
 
 // ===== 版本信息 =====
-#define FW_VERSION "2.1.0"
+#define FW_VERSION "2.2.0"
 #define FW_NAME "VoidTerminal-OS"
 
 // ===== 引脚配置 (A01 墨水屏 + ESP-12F) =====

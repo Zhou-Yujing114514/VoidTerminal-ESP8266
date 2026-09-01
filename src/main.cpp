@@ -32,13 +32,13 @@ void setup() {
     
     // 显示启动测试画面
     disp.clear();
-    disp.drawTitleBar("VoidTerminal-OS");
-    disp.drawText(10, 30, "系统启动中...", 2);
-    disp.drawText(10, 55, "版本: v2.1", 1);
-    disp.drawText(10, 70, "屏幕: 2.9寸 A01", 1);
-    disp.drawText(10, 85, "如果看到此画面,", 1);
-    disp.drawText(10, 100, "说明屏幕驱动正常!", 1);
-    disp.drawStatusBar("初始化", "v2.1");
+    disp.drawTitleBar("虚空终端系统");
+    disp.drawText(10, 28, "系统启动中...", 2);
+    disp.drawText(10, 52, "版本: v2.2.0", 1);
+    disp.drawText(10, 68, "屏幕: 2.9寸 A01", 1);
+    disp.drawText(10, 84, "看到此画面说明", 1);
+    disp.drawText(10, 100, "屏幕驱动正常!", 1);
+    disp.drawStatusBar("初始化中", "v2.2.0");
     disp.refresh(true);
     Serial.println("启动画面已显示");
     
