@@ -24,20 +24,22 @@ public:
     void update();        // 在主循环中调用，更新按键状态
     
 private:
-    int _menuPinState;
-    int _upPinState;
-    int _downPinState;
     unsigned long _menuPressTime;
     unsigned long _upPressTime;
     unsigned long _downPressTime;
     unsigned long _upLastReleaseTime;
     unsigned long _downLastReleaseTime;
     unsigned long _menuLastReleaseTime;
+    unsigned long _lastConflictReadTime;  // 上次读取冲突引脚的时间（用于降频）
+    unsigned long _upFirstLowTime;        // 按键2第一次读到 LOW 的时间（用于二次确认）
+    unsigned long _downFirstLowTime;      // 按键3第一次读到 LOW 的时间
     bool _menuPressed;
     bool _upPressed;
     bool _downPressed;
     bool _upLongFired;
     bool _downLongFired;
+    bool _upConfirmed;   // 按键2是否已通过二次确认
+    bool _downConfirmed; // 按键3是否已通过二次确认
     KeyEvent _pendingEvent;
     
     int readPinSafe(int pin);

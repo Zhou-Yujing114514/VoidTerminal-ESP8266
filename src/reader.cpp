@@ -91,7 +91,8 @@ void ReaderManager::drawFileList() {
             bool selected = (i == _fileIndex);
             if (selected) {
                 disp.drawRect(0, y - 2, SCREEN_W, 14, true);
-                display.setTextColor(COLOR_WHITE);
+                u8g2Fonts.setForegroundColor(GxEPD_WHITE);
+                u8g2Fonts.setBackgroundColor(GxEPD_BLACK);
             }
             
             char line[80];
@@ -104,7 +105,8 @@ void ReaderManager::drawFileList() {
             disp.drawText(4, y, line, 1);
             
             if (selected) {
-                display.setTextColor(COLOR_BLACK);
+                u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+                u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
             }
             
             y += 12;

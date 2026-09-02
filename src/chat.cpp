@@ -550,7 +550,8 @@ void ChatManager::drawConversationList() {
             bool selected = (i == _selectedConv);
             if (selected) {
                 disp.drawRect(0, y - 2, SCREEN_W, 16, true);
-                display.setTextColor(COLOR_WHITE);
+                u8g2Fonts.setForegroundColor(GxEPD_WHITE);
+                u8g2Fonts.setBackgroundColor(GxEPD_BLACK);
             }
             const char* typeIcon = "";
             switch (_conversations[i].type) {
@@ -565,7 +566,8 @@ void ChatManager::drawConversationList() {
                 snprintf(line, sizeof(line), "%s %s", typeIcon, _conversations[i].name);
             }
             disp.drawText(4, y, line, 1);
-            if (selected) display.setTextColor(COLOR_BLACK);
+                u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+                u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
             y += 14;
             visibleCount++;
         }
@@ -650,7 +652,8 @@ void ChatManager::drawChatView() {
         char inputLine[100];
         snprintf(inputLine, sizeof(inputLine), "%s%s", _inputBuffer, _pinyin);
         disp.drawText(2, SCREEN_H - 12, inputLine, 1);
-        display.setTextColor(COLOR_BLACK);
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
     } else {
         disp.drawStatusBar("上/下:翻页 双击下:输入 短按上:返回列表", "Home:主页");
     }
@@ -724,7 +727,8 @@ void ChatManager::drawInputKeyboard() {
         disp.drawRect(2, sendY, leftW - 4, sendH, true);
         display.setTextColor(COLOR_WHITE);
         disp.drawText(leftW/2 - 12, sendY + 8, "发送", 2);
-        display.setTextColor(COLOR_BLACK);
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
     } else {
         disp.drawRect(2, sendY, leftW - 4, sendH, false);
         disp.drawText(leftW/2 - 12, sendY + 8, "发送", 2);
