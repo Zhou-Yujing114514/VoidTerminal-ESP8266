@@ -8,7 +8,7 @@
 #include <SD.h>
 
 // ===== 版本信息 =====
-#define FW_VERSION "2.3.0"
+#define FW_VERSION "2.3.2"
 #define FW_NAME "VoidTerminal-ESP8266"
 
 // ===== 引脚配置 (A01 墨水屏 + ESP-12F) =====
@@ -40,7 +40,6 @@
 
 // ===== 存储配置 =====
 #define EEPROM_SIZE 512
-#define MAX_READER_BUFFER 512
 
 // ===== 按键时长 =====
 #define KEY_DEBOUNCE_MS 50

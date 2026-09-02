@@ -11,7 +11,6 @@
 #include "app_state.h"
 #include "chat.h"
 #include "monitor.h"
-#include "reader.h"
 #include "clock.h"
 #include "wifi_config.h"
 
@@ -39,7 +38,6 @@ void setup() {
     app.init();
     chat.init();
     monitor.init();
-    reader.init();
     clockMgr.init();
     wifiConfig.init();
     
@@ -81,11 +79,6 @@ void loop() {
             monitor.update();
             break;
             
-        case STATE_READER:
-            reader.handleKey(evt);
-            reader.update();
-            break;
-            
         case STATE_CLOCK:
             clockMgr.handleKey(evt);
             clockMgr.update();
@@ -111,7 +104,6 @@ void loop() {
         switch (state) {
             case STATE_CHAT: chat.exit(); break;
             case STATE_MONITOR: monitor.exit(); break;
-            case STATE_READER: reader.exit(); break;
             case STATE_CLOCK: clockMgr.exit(); break;
             case STATE_CONFIG: wifiConfig.exit(); break;
             default: break;
@@ -121,7 +113,6 @@ void loop() {
         switch (newState) {
             case STATE_CHAT: chat.enter(); break;
             case STATE_MONITOR: monitor.enter(); break;
-            case STATE_READER: reader.enter(); break;
             case STATE_CLOCK: clockMgr.enter(); break;
             case STATE_CONFIG: wifiConfig.enter(); break;
             default: break;

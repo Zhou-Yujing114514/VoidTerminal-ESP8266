@@ -11,7 +11,6 @@ enum AppState {
     STATE_MENU,         // 主菜单
     STATE_CHAT,         // 虚空终端聊天
     STATE_MONITOR,      // 服务器监控
-    STATE_READER,       // TXT阅读器
     STATE_CLOCK,        // 时钟
     STATE_CONFIG,       // 配网设置
     STATE_SHUTDOWN      // 关机/休眠
@@ -21,7 +20,6 @@ enum AppState {
 enum MenuItem {
     MENU_CHAT = 0,
     MENU_MONITOR,
-    MENU_READER,
     MENU_CLOCK,
     MENU_CONFIG,
     MENU_COUNT

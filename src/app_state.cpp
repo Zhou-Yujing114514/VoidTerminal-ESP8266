@@ -5,7 +5,6 @@ AppStateManager app;
 const char* menuNames[MENU_COUNT] = {
     "虚空终端",
     "服务器监控",
-    "TXT阅读器",
     "时钟",
     "配网设置"
 };
@@ -46,9 +45,9 @@ void AppStateManager::drawMenu() {
     disp.clear();
     disp.drawTitleBar("虚空终端 OS");
     
-    // 2x3 网格菜单
+    // 2x2 网格菜单（4个菜单项）
     int itemW = SCREEN_W / 2;
-    int itemH = (SCREEN_H - 16 - 12) / 3;
+    int itemH = (SCREEN_H - 16 - 12) / 2;
     
     for (int i = 0; i < MENU_COUNT; i++) {
         int col = i % 2;
@@ -112,7 +111,6 @@ void AppStateManager::handleKey(KeyEvent evt) {
                 switch (_menuIndex) {
                     case MENU_CHAT: setState(STATE_CHAT); break;
                     case MENU_MONITOR: setState(STATE_MONITOR); break;
-                    case MENU_READER: setState(STATE_READER); break;
                     case MENU_CLOCK: setState(STATE_CLOCK); break;
                     case MENU_CONFIG: setState(STATE_CONFIG); break;
                 }
