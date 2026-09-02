@@ -31,7 +31,7 @@ struct Conversation {
 struct ChatMessage {
     char from[32];      // 发送者ID
     char fromName[32];  // 发送者昵称
-    char content[128];  // 消息内容
+    char content[64];   // 消息内容（从128减少到64，节省RAM）
     bool isMe;          // 是否是自己发的
     unsigned long time; // 时间戳
 };
@@ -50,8 +50,8 @@ enum ChatView {
     CHAT_VIEW_CHAT        // 聊天界面
 };
 
-#define MAX_CONVERSATIONS 10
-#define MAX_MESSAGES_PER_CONV 20
+#define MAX_CONVERSATIONS 5
+#define MAX_MESSAGES_PER_CONV 5
 
 class ChatManager {
 public:
@@ -87,7 +87,7 @@ private:
     char _pinyin[32];
     int _pinyinLen;
     int _candidateIndex;
-    char _inputBuffer[128];
+    char _inputBuffer[64];
     int _inputBufferLen;
     
     // WebSocket
