@@ -16,7 +16,7 @@ void AppStateManager::init() {
     _menuIndex = 0;
     _needRedraw = true;
     drawBootScreen();
-    delay(1500);
+    delay(500);  // 短暂显示启动画面（从1500ms减少到500ms，避免阻塞过久）
     setState(STATE_MENU);
 }
 
@@ -60,8 +60,9 @@ void AppStateManager::drawMenu() {
         
         if (selected) {
             disp.drawRect(x + 2, y + 2, itemW - 4, itemH - 4, true);
-            // 反白文字
-            display.setTextColor(COLOR_WHITE);
+            // 反白文字（注意：u8g2Fonts 不受 display.setTextColor 影响，必须用 setForegroundColor）
+            u8g2Fonts.setForegroundColor(GxEPD_WHITE);
+            u8g2Fonts.setBackgroundColor(GxEPD_BLACK);
         } else {
             disp.drawRect(x + 2, y + 2, itemW - 4, itemH - 4, false);
         }
@@ -71,7 +72,8 @@ void AppStateManager::drawMenu() {
         disp.drawText(x + (itemW - textW) / 2, y + itemH / 2 - 4, menuNames[i], 1);
         
         if (selected) {
-            display.setTextColor(COLOR_BLACK);
+            u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+            u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
         }
     }
     

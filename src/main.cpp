@@ -30,19 +30,11 @@ void setup() {
     disp.init();
     Serial.println("屏幕初始化完成");
     
-    // 显示启动测试画面
-    disp.clear();
-    disp.drawTitleBar("虚空终端系统");
-    disp.drawText(10, 28, "系统启动中...", 2);
-    disp.drawText(10, 52, "版本: v2.2.0", 1);
-    disp.drawText(10, 68, "屏幕: 2.9寸 A01", 1);
-    disp.drawText(10, 84, "看到此画面说明", 1);
-    disp.drawText(10, 100, "屏幕驱动正常!", 1);
-    disp.drawStatusBar("初始化中", "v2.2.0");
-    disp.refresh(true);
-    Serial.println("启动画面已显示");
+    // 打印启动信息和剩余 RAM（方便调试）
+    Serial.printf("剩余 RAM: %d 字节 (%.1f KB)\n", ESP.getFreeHeap(), ESP.getFreeHeap() / 1024.0);
+    Serial.printf("Flash 大小: %d 字节\n", ESP.getFlashChipSize());
     
-    // 初始化其他模块
+    // 初始化其他模块（app.init() 里会显示启动画面）
     input.init();
     app.init();
     chat.init();
@@ -50,6 +42,9 @@ void setup() {
     reader.init();
     clockMgr.init();
     wifiConfig.init();
+    
+    // 再次打印 RAM（初始化后）
+    Serial.printf("初始化后剩余 RAM: %d 字节 (%.1f KB)\n", ESP.getFreeHeap(), ESP.getFreeHeap() / 1024.0);
     
     // 尝试连接预设 WiFi（后台连接，不阻塞启动）
     if (wifiConfig.isWifiConnected()) {

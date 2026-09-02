@@ -3,7 +3,7 @@
 InputManager input;
 
 void InputManager::init() {
-    // 按键1（Menu）- GPIO12，无冲突，正常初始化
+    // 按键1（Menu/Home）- GPIO12，无冲突，正常初始化
     pinMode(KEY_MENU, INPUT_PULLUP);
     
     // 按键2（Up）- GPIO0，与 EPD_DC 冲突，不在此初始化
@@ -15,13 +15,19 @@ void InputManager::init() {
     _downPressed = false;
     _upLongFired = false;
     _downLongFired = false;
+    _upConfirmed = false;
+    _downConfirmed = false;
     _pendingEvent = KEY_NONE;
     _upLastReleaseTime = 0;
     _downLastReleaseTime = 0;
     _menuLastReleaseTime = 0;
+    _lastConflictReadTime = 0;
+    _upFirstLowTime = 0;
+    _downFirstLowTime = 0;
     
     Serial.println("InputManager: 按键初始化完成");
     Serial.printf("  KEY_MENU=GPIO%d, KEY_UP=GPIO%d, KEY_DOWN=GPIO%d\n", KEY_MENU, KEY_UP, KEY_DOWN);
+    Serial.println("  冲突引脚采用二次确认+50ms降频读取");
 }
 
 int InputManager::readPinSafe(int pin) {
@@ -31,22 +37,22 @@ int InputManager::readPinSafe(int pin) {
     if (isConflict) {
         // 临时切换为输入上拉模式
         pinMode(pin, INPUT_PULLUP);
-        delayMicroseconds(200); // 等待电平稳定
+        delayMicroseconds(300); // 等待电平稳定（从200增加到300，更稳定）
     }
     
-    // 多次采样防抖（10次采样，超过5次为高则高）
+    // 多次采样防抖（8次采样，超过4次为高则高）
     int sum = 0;
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 8; i++) {
         sum += digitalRead(pin);
-        delayMicroseconds(200);
+        delayMicroseconds(150);
     }
-    int result = (sum > 5) ? HIGH : LOW;
+    int result = (sum > 4) ? HIGH : LOW;
     
     if (isConflict) {
         // 恢复为输出高电平（CS 和 DC 空闲时都是高电平）
         pinMode(pin, OUTPUT);
         digitalWrite(pin, HIGH);
-        delayMicroseconds(100);
+        delayMicroseconds(150); // 等待恢复稳定（从100增加到150）
     }
     
     return result;
@@ -55,7 +61,7 @@ int InputManager::readPinSafe(int pin) {
 void InputManager::update() {
     unsigned long now = millis();
     
-    // 按键1（Menu/Home）- 只处理短按，禁长按
+    // ===== 按键1（Menu/Home）- 无冲突，正常读取，只处理短按 =====
     int menuState = readPinSafe(KEY_MENU);
     if (menuState == LOW && !_menuPressed) {
         _menuPressed = true;
@@ -73,22 +79,43 @@ void InputManager::update() {
         }
     }
     
-    // 按键2（Up）- 短按/长按/双击
+    // ===== 冲突引脚降频：每 50ms 才读取一次（不是每次 loop）=====
+    if (now - _lastConflictReadTime < 50) {
+        return; // 还没到读取时间，跳过
+    }
+    _lastConflictReadTime = now;
+    
+    // ===== 按键2（Up）- 二次确认机制 =====
     int upState = readPinSafe(KEY_UP);
+    
     if (upState == LOW && !_upPressed) {
-        _upPressed = true;
-        _upPressTime = now;
-        _upLongFired = false;
-    } else if (upState == HIGH && _upPressed) {
-        _upPressed = false;
-        unsigned long duration = now - _upPressTime;
-        if (duration > KEY_DEBOUNCE_MS && !_upLongFired) {
-            if (now - _upLastReleaseTime < KEY_DOUBLECLICK_MS) {
-                _pendingEvent = KEY_UP_DOUBLE;
-            } else {
-                _pendingEvent = KEY_UP_SHORT;
+        // 第一次读到 LOW，记录时间，不立即认为按下
+        if (_upFirstLowTime == 0) {
+            _upFirstLowTime = now;
+        } else if (now - _upFirstLowTime >= 10) {
+            // 连续两次（间隔>=10ms）都读到 LOW，确认按下
+            _upPressed = true;
+            _upPressTime = now;
+            _upLongFired = false;
+            _upConfirmed = true;
+            _upFirstLowTime = 0;
+        }
+    } else if (upState == HIGH) {
+        // 读到 HIGH，重置首次 LOW 时间
+        _upFirstLowTime = 0;
+        
+        if (_upPressed) {
+            _upPressed = false;
+            _upConfirmed = false;
+            unsigned long duration = now - _upPressTime;
+            if (duration > KEY_DEBOUNCE_MS && !_upLongFired) {
+                if (now - _upLastReleaseTime < KEY_DOUBLECLICK_MS) {
+                    _pendingEvent = KEY_UP_DOUBLE;
+                } else {
+                    _pendingEvent = KEY_UP_SHORT;
+                }
+                _upLastReleaseTime = now;
             }
-            _upLastReleaseTime = now;
         }
     } else if (upState == LOW && _upPressed && !_upLongFired) {
         if (now - _upPressTime > KEY_LONGPRESS_MS) {
@@ -97,26 +124,42 @@ void InputManager::update() {
         }
     }
     
-    // 按键3（Down）- 短按/长按/双击
+    // ===== 按键3（Down）- 二次确认机制 =====
     int downState = readPinSafe(KEY_DOWN);
+    
     if (downState == LOW && !_downPressed) {
-        _downPressed = true;
-        _downPressTime = now;
-        _downLongFired = false;
-        Serial.println("KEY_DOWN 按下!");
-    } else if (downState == HIGH && _downPressed) {
-        _downPressed = false;
-        unsigned long duration = now - _downPressTime;
-        Serial.printf("KEY_DOWN 释放, 时长=%lu\n", duration);
-        if (duration > KEY_DEBOUNCE_MS && !_downLongFired) {
-            if (now - _downLastReleaseTime < KEY_DOUBLECLICK_MS) {
-                _pendingEvent = KEY_DOWN_DOUBLE;
-                Serial.println("KEY_DOWN 双击事件!");
-            } else {
-                _pendingEvent = KEY_DOWN_SHORT;
-                Serial.println("KEY_DOWN 短按事件!");
+        // 第一次读到 LOW，记录时间，不立即认为按下
+        if (_downFirstLowTime == 0) {
+            _downFirstLowTime = now;
+            Serial.println("KEY_DOWN 首次检测到 LOW，等待二次确认...");
+        } else if (now - _downFirstLowTime >= 10) {
+            // 连续两次（间隔>=10ms）都读到 LOW，确认按下
+            _downPressed = true;
+            _downPressTime = now;
+            _downLongFired = false;
+            _downConfirmed = true;
+            _downFirstLowTime = 0;
+            Serial.println("KEY_DOWN 二次确认通过，按下!");
+        }
+    } else if (downState == HIGH) {
+        // 读到 HIGH，重置首次 LOW 时间
+        _downFirstLowTime = 0;
+        
+        if (_downPressed) {
+            _downPressed = false;
+            _downConfirmed = false;
+            unsigned long duration = now - _downPressTime;
+            Serial.printf("KEY_DOWN 释放, 时长=%lu\n", duration);
+            if (duration > KEY_DEBOUNCE_MS && !_downLongFired) {
+                if (now - _downLastReleaseTime < KEY_DOUBLECLICK_MS) {
+                    _pendingEvent = KEY_DOWN_DOUBLE;
+                    Serial.println("KEY_DOWN 双击事件!");
+                } else {
+                    _pendingEvent = KEY_DOWN_SHORT;
+                    Serial.println("KEY_DOWN 短按事件!");
+                }
+                _downLastReleaseTime = now;
             }
-            _downLastReleaseTime = now;
         }
     } else if (downState == LOW && _downPressed && !_downLongFired) {
         if (now - _downPressTime > KEY_LONGPRESS_MS) {
