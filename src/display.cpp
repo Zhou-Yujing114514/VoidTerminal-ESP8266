@@ -134,6 +134,14 @@ void DisplayManager::drawMessageBox(const char* title, const char* message) {
     int lineIdx = 0;
     int i = 0;
     while (message[i] && y < SCREEN_H - 20) {
+        if (lineIdx >= 78) {
+            // 缓冲区快满了，强制换行
+            line[lineIdx] = 0;
+            drawText(4, y, line, 1);
+            y += 18;
+            lineIdx = 0;
+            lineLen = 0;
+        }
         line[lineIdx++] = message[i];
         // 中文占3字节，宽度算2个
         if ((unsigned char)message[i] >= 0x80) {

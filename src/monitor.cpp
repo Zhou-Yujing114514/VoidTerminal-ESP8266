@@ -5,6 +5,7 @@ MonitorManager monitor;
 
 void MonitorManager::init() {
     _active = false;
+    _firstLoad = false;
     _selectedServer = 0;
     _needRedraw = true;
     _data.valid = false;
@@ -16,9 +17,8 @@ void MonitorManager::enter() {
     _active = true;
     _needRedraw = true;
     _data.valid = false;
+    _firstLoad = true;  // 标记首次加载，在update()中异步获取
     drawLoading();
-    fetchData();
-    drawMonitor();
 }
 
 void MonitorManager::exit() {
@@ -171,8 +171,8 @@ void MonitorManager::handleKey(KeyEvent evt) {
     }
     
     if (evt == KEY_DOWN_SHORT) {
-        // 短按下 = 局部刷新（1秒间隔）
-        if (millis() - _lastPartialRefresh > 1000) {
+        // 短按下 = 局部刷新（5秒间隔，避免频繁请求）
+        if (millis() - _lastPartialRefresh > 5000) {
             _lastPartialRefresh = millis();
             fetchData();
             drawPartialUpdate();
@@ -190,8 +190,18 @@ void MonitorManager::handleKey(KeyEvent evt) {
 void MonitorManager::update() {
     if (!_active) return;
     
-    // 自动1秒局部刷新
-    if (millis() - _lastPartialRefresh > 1000) {
+    // 首次加载：异步获取数据（避免enter()阻塞）
+    if (_firstLoad) {
+        _firstLoad = false;
+        fetchData();
+        if (_active) {
+            drawMonitor();
+        }
+        return;
+    }
+    
+    // 自动30秒局部刷新（避免频繁HTTP请求阻塞界面）
+    if (millis() - _lastPartialRefresh > 30000) {
         _lastPartialRefresh = millis();
         fetchData();
         if (_active) {
@@ -199,8 +209,8 @@ void MonitorManager::update() {
         }
     }
     
-    // 自动10秒全局刷新
-    if (millis() - _lastFullRefresh > 10000) {
+    // 自动60秒全局刷新
+    if (millis() - _lastFullRefresh > 60000) {
         _lastFullRefresh = millis();
         if (_active) {
             drawMonitor();

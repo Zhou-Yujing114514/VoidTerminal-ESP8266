@@ -36,6 +36,7 @@ public:
     
 private:
     bool _active;
+    bool _firstLoad;  // 首次加载标记（异步加载用）
     MonitorData _data;
     unsigned long _lastFullRefresh;
     unsigned long _lastPartialRefresh;
