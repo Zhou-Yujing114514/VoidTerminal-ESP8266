@@ -478,6 +478,7 @@ void ChatManager::addConversation(const char* id, const char* name, ConvType typ
     for (int i = 0; i < _convCount; i++) {
         if (strcmp(_conversations[i].id, id) == 0) {
             strncpy(_conversations[i].name, name, 31);
+            _conversations[i].name[31] = 0;
             return;
         }
     }

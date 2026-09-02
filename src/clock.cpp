@@ -35,11 +35,12 @@ void ClockManager::syncTime() {
     _lastSyncAttempt = millis();
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     
-    // 等待时间同步
+    // 等待时间同步（最多5次×500ms=2.5秒，避免看门狗超时）
     time_t now = time(nullptr);
     int attempts = 0;
-    while (now < 100000 && attempts < 20) {
+    while (now < 100000 && attempts < 5) {
         delay(500);
+        yield();  // 喂狗，防止看门狗超时
         now = time(nullptr);
         attempts++;
     }
