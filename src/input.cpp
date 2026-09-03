@@ -6,8 +6,8 @@ void InputManager::init() {
     // 按键1（Menu/Home）- GPIO12，无冲突，正常初始化
     pinMode(KEY_MENU, INPUT_PULLUP);
     
-    // 按键3（Down）- GPIO5：TXT阅读器已删除，SD卡不再使用，
-    // GPIO5 现在只需作为普通按键输入，正常初始化为输入上拉。
+    // 按键3（Down）- GPIO3(RX)：SD卡版硬件，按键3改到GPIO3(RX引脚)。
+    // 仅作按键输入，不读取串口，可安全设为输入上拉（不影响TX调试输出）。
     pinMode(KEY_DOWN, INPUT_PULLUP);
     
     // 按键2（Up）- GPIO0，与 EPD_DC 冲突，不在此初始化
@@ -34,7 +34,7 @@ void InputManager::init() {
 
 int InputManager::readPinSafe(int pin) {
     // 只有 EPD_DC(GPIO0) 与屏幕刷新冲突，需要临时切换模式
-    // GPIO5 已不再用于 SD 卡，作为普通按键输入，无需特殊处理
+    // GPIO3(RX)/GPIO12 作为普通按键输入，无需特殊处理
     bool isConflict = (pin == EPD_DC);
     
     if (isConflict) {
