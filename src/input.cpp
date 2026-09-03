@@ -6,10 +6,12 @@ void InputManager::init() {
     // 按键1（Menu/Home）- GPIO12，无冲突，正常初始化
     pinMode(KEY_MENU, INPUT_PULLUP);
     
-    // 按键2（Up）- GPIO0，与 EPD_DC 冲突，不在此初始化
-    // 按键3（Down）- GPIO5，与 SD_CS 冲突，不在此初始化
-    // 这两个引脚在 readPinSafe 中临时切换模式
+    // 按键3（Down）- GPIO5：TXT阅读器已删除，SD卡不再使用，
+    // GPIO5 现在只需作为普通按键输入，正常初始化为输入上拉。
+    pinMode(KEY_DOWN, INPUT_PULLUP);
     
+    // 按键2（Up）- GPIO0，与 EPD_DC 冲突，不在此初始化
+    // 在 readPinSafe 中临时切换模式
     _menuPressed = false;
     _upPressed = false;
     _downPressed = false;
@@ -27,17 +29,18 @@ void InputManager::init() {
     
     Serial.println("InputManager: 按键初始化完成");
     Serial.printf("  KEY_MENU=GPIO%d, KEY_UP=GPIO%d, KEY_DOWN=GPIO%d\n", KEY_MENU, KEY_UP, KEY_DOWN);
-    Serial.println("  冲突引脚采用二次确认+50ms降频读取");
+    Serial.println("  仅 GPIO0(EPD_DC) 采用冲突引脚降频读取");
 }
 
 int InputManager::readPinSafe(int pin) {
-    // 判断是否是冲突引脚
-    bool isConflict = (pin == EPD_DC) || (pin == SD_CS);
+    // 只有 EPD_DC(GPIO0) 与屏幕刷新冲突，需要临时切换模式
+    // GPIO5 已不再用于 SD 卡，作为普通按键输入，无需特殊处理
+    bool isConflict = (pin == EPD_DC);
     
     if (isConflict) {
         // 临时切换为输入上拉模式
         pinMode(pin, INPUT_PULLUP);
-        delayMicroseconds(300); // 等待电平稳定（从200增加到300，更稳定）
+        delayMicroseconds(300); // 等待电平稳定
     }
     
     // 多次采样防抖（8次采样，超过4次为高则高）
@@ -49,10 +52,10 @@ int InputManager::readPinSafe(int pin) {
     int result = (sum > 4) ? HIGH : LOW;
     
     if (isConflict) {
-        // 恢复为输出高电平（CS 和 DC 空闲时都是高电平）
+        // 恢复为输出高电平（DC 空闲时是高电平）
         pinMode(pin, OUTPUT);
         digitalWrite(pin, HIGH);
-        delayMicroseconds(150); // 等待恢复稳定（从100增加到150）
+        delayMicroseconds(150);
     }
     
     return result;
@@ -79,7 +82,46 @@ void InputManager::update() {
         }
     }
     
-    // ===== 冲突引脚降频：每 50ms 才读取一次（不是每次 loop）=====
+    // ===== 按键3（Down）- 无冲突，全速读取，二次确认机制 =====
+    int downState = readPinSafe(KEY_DOWN);
+    
+    if (downState == LOW && !_downPressed) {
+        // 第一次读到 LOW，记录时间，不立即认为按下
+        if (_downFirstLowTime == 0) {
+            _downFirstLowTime = now;
+        } else if (now - _downFirstLowTime >= 10) {
+            // 连续两次（间隔>=10ms）都读到 LOW，确认按下
+            _downPressed = true;
+            _downPressTime = now;
+            _downLongFired = false;
+            _downConfirmed = true;
+            _downFirstLowTime = 0;
+        }
+    } else if (downState == HIGH) {
+        // 读到 HIGH，重置首次 LOW 时间
+        _downFirstLowTime = 0;
+        
+        if (_downPressed) {
+            _downPressed = false;
+            _downConfirmed = false;
+            unsigned long duration = now - _downPressTime;
+            if (duration > KEY_DEBOUNCE_MS && !_downLongFired) {
+                if (now - _downLastReleaseTime < KEY_DOUBLECLICK_MS) {
+                    _pendingEvent = KEY_DOWN_DOUBLE;
+                } else {
+                    _pendingEvent = KEY_DOWN_SHORT;
+                }
+                _downLastReleaseTime = now;
+            }
+        }
+    } else if (downState == LOW && _downPressed && !_downLongFired) {
+        if (now - _downPressTime > KEY_LONGPRESS_MS) {
+            _downLongFired = true;
+            _pendingEvent = KEY_DOWN_LONG;
+        }
+    }
+    
+    // ===== 冲突引脚（仅 GPIO0/EPD_DC）降频：每 50ms 才读取一次 =====
     if (now - _lastConflictReadTime < 50) {
         return; // 还没到读取时间，跳过
     }
@@ -121,51 +163,6 @@ void InputManager::update() {
         if (now - _upPressTime > KEY_LONGPRESS_MS) {
             _upLongFired = true;
             _pendingEvent = KEY_UP_LONG;
-        }
-    }
-    
-    // ===== 按键3（Down）- 二次确认机制 =====
-    int downState = readPinSafe(KEY_DOWN);
-    
-    if (downState == LOW && !_downPressed) {
-        // 第一次读到 LOW，记录时间，不立即认为按下
-        if (_downFirstLowTime == 0) {
-            _downFirstLowTime = now;
-            Serial.println("KEY_DOWN 首次检测到 LOW，等待二次确认...");
-        } else if (now - _downFirstLowTime >= 10) {
-            // 连续两次（间隔>=10ms）都读到 LOW，确认按下
-            _downPressed = true;
-            _downPressTime = now;
-            _downLongFired = false;
-            _downConfirmed = true;
-            _downFirstLowTime = 0;
-            Serial.println("KEY_DOWN 二次确认通过，按下!");
-        }
-    } else if (downState == HIGH) {
-        // 读到 HIGH，重置首次 LOW 时间
-        _downFirstLowTime = 0;
-        
-        if (_downPressed) {
-            _downPressed = false;
-            _downConfirmed = false;
-            unsigned long duration = now - _downPressTime;
-            Serial.printf("KEY_DOWN 释放, 时长=%lu\n", duration);
-            if (duration > KEY_DEBOUNCE_MS && !_downLongFired) {
-                if (now - _downLastReleaseTime < KEY_DOUBLECLICK_MS) {
-                    _pendingEvent = KEY_DOWN_DOUBLE;
-                    Serial.println("KEY_DOWN 双击事件!");
-                } else {
-                    _pendingEvent = KEY_DOWN_SHORT;
-                    Serial.println("KEY_DOWN 短按事件!");
-                }
-                _downLastReleaseTime = now;
-            }
-        }
-    } else if (downState == LOW && _downPressed && !_downLongFired) {
-        if (now - _downPressTime > KEY_LONGPRESS_MS) {
-            _downLongFired = true;
-            _pendingEvent = KEY_DOWN_LONG;
-            Serial.println("KEY_DOWN 长按事件!");
         }
     }
 }

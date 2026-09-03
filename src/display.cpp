@@ -6,7 +6,8 @@ DisplayManager disp;
 
 // 字体高度（wqy14 约14像素高）
 #define FONT_HEIGHT 14
-#define FONT_WIDTH 8
+#define FONT_WIDTH 14
+#define FONT_HALF_WIDTH 8
 
 void DisplayManager::init() {
     display.init(115200);
@@ -80,14 +81,51 @@ int DisplayManager::getTextWidth(const char* text) {
     int i = 0;
     while (text[i]) {
         if ((unsigned char)text[i] >= 0x80) {
-            w += FONT_HEIGHT; // 中文
+            w += FONT_WIDTH; // 中文全角
             i += 3; // UTF-8 中文占3字节
         } else {
-            w += FONT_WIDTH; // 英文
+            w += FONT_HALF_WIDTH; // 英文半角
             i++;
         }
     }
     return w;
+}
+
+int DisplayManager::measureLine(const char* text, int maxWidth) {
+    int i = 0;
+    int w = 0;
+    while (text[i] && text[i] != '\n') {
+        if ((unsigned char)text[i] >= 0x80) {
+            if (w + FONT_WIDTH > maxWidth) break;
+            w += FONT_WIDTH;
+            i += 3;
+        } else {
+            if (w + FONT_HALF_WIDTH > maxWidth) break;
+            w += FONT_HALF_WIDTH;
+            i++;
+        }
+    }
+    if (text[i] == '\n') i++;
+    return i;
+}
+
+int DisplayManager::drawWrappedText(int x, int y, const char* text, int maxWidth, int lineHeight) {
+    int i = 0;
+    int curY = y;
+    while (text[i] && curY + FONT_HEIGHT <= SCREEN_H - 16) {
+        int lineBytes = measureLine(text + i, maxWidth);
+        if (lineBytes == 0) { i++; continue; }
+        char line[96];
+        int n = lineBytes;
+        if (n > 95) n = 95;
+        memcpy(line, text + i, n);
+        if (line[n-1] == '\n') n--;
+        line[n] = 0;
+        drawText(x, curY, line, 1);
+        curY += lineHeight;
+        i += lineBytes;
+    }
+    return curY;
 }
 
 void DisplayManager::drawTitleBar(const char* title) {
@@ -127,42 +165,8 @@ void DisplayManager::drawMenuItem(int index, const char* text, bool selected) {
 void DisplayManager::drawMessageBox(const char* title, const char* message) {
     clear();
     drawTitleBar(title);
-    // 简单的自动换行
-    int y = 28;
-    int lineLen = 0;
-    char line[80];
-    int lineIdx = 0;
-    int i = 0;
-    while (message[i] && y < SCREEN_H - 20) {
-        if (lineIdx >= 78) {
-            // 缓冲区快满了，强制换行
-            line[lineIdx] = 0;
-            drawText(4, y, line, 1);
-            y += 18;
-            lineIdx = 0;
-            lineLen = 0;
-        }
-        line[lineIdx++] = message[i];
-        // 中文占3字节，宽度算2个
-        if ((unsigned char)message[i] >= 0x80) {
-            lineLen += 2;
-            i += 3;
-        } else {
-            lineLen += 1;
-            i++;
-        }
-        if (message[i-1] == '\n' || lineLen >= 32) {
-            line[lineIdx] = 0;
-            drawText(4, y, line, 1);
-            y += 18;
-            lineIdx = 0;
-            lineLen = 0;
-        }
-    }
-    if (lineIdx > 0) {
-        line[lineIdx] = 0;
-        drawText(4, y, line, 1);
-    }
+    // 按 UTF-8 边界 + 像素宽度自动换行
+    drawWrappedText(4, 28, message, SCREEN_W - 8, 18);
     refresh(true);
 }
 

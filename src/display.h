@@ -16,6 +16,10 @@ public:
     void drawBitmap(int x, int y, const uint8_t* bitmap, int w, int h);
     void setFont(int size);
     int getTextWidth(const char* text);
+    // 返回一个逻辑行的字节数（UTF-8 安全，不超 maxWidth 像素）
+    int measureLine(const char* text, int maxWidth);
+    // 按 UTF-8 边界 + 像素宽度换行绘制多行文本，返回下一行 y 坐标
+    int drawWrappedText(int x, int y, const char* text, int maxWidth, int lineHeight);
     
     // UI 组件
     void drawTitleBar(const char* title);
