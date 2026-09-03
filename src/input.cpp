@@ -17,8 +17,6 @@ void InputManager::init() {
     _downPressed = false;
     _upLongFired = false;
     _downLongFired = false;
-    _upConfirmed = false;
-    _downConfirmed = false;
     _pendingEvent = KEY_NONE;
     _upLastReleaseTime = 0;
     _downLastReleaseTime = 0;
@@ -94,7 +92,6 @@ void InputManager::update() {
             _downPressed = true;
             _downPressTime = now;
             _downLongFired = false;
-            _downConfirmed = true;
             _downFirstLowTime = 0;
         }
     } else if (downState == HIGH) {
@@ -103,7 +100,6 @@ void InputManager::update() {
         
         if (_downPressed) {
             _downPressed = false;
-            _downConfirmed = false;
             unsigned long duration = now - _downPressTime;
             if (duration > KEY_DEBOUNCE_MS && !_downLongFired) {
                 if (now - _downLastReleaseTime < KEY_DOUBLECLICK_MS) {
@@ -139,7 +135,6 @@ void InputManager::update() {
             _upPressed = true;
             _upPressTime = now;
             _upLongFired = false;
-            _upConfirmed = true;
             _upFirstLowTime = 0;
         }
     } else if (upState == HIGH) {
@@ -148,7 +143,6 @@ void InputManager::update() {
         
         if (_upPressed) {
             _upPressed = false;
-            _upConfirmed = false;
             unsigned long duration = now - _upPressTime;
             if (duration > KEY_DEBOUNCE_MS && !_upLongFired) {
                 if (now - _upLastReleaseTime < KEY_DOUBLECLICK_MS) {
