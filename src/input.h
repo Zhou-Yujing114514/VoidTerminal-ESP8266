@@ -38,8 +38,6 @@ private:
     bool _downPressed;
     bool _upLongFired;
     bool _downLongFired;
-    bool _upConfirmed;   // 按键2是否已通过二次确认
-    bool _downConfirmed; // 按键3是否已通过二次确认
     KeyEvent _pendingEvent;
     
     int readPinSafe(int pin);
