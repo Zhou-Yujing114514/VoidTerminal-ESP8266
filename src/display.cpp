@@ -21,7 +21,7 @@ void DisplayManager::init() {
     u8g2Fonts.setFontDirection(0);
     u8g2Fonts.setForegroundColor(GxEPD_BLACK);
     u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
-    u8g2Fonts.setFont(u8g2_font_wqy14_t_chinese2); // 文泉驿14号，常用字子集(~16KB)
+    u8g2Fonts.setFont(u8g2_font_wqy14_t_gb2312a); // 文泉驿14号，GB2312一级全字库(3755字，放flash)
     
     _needFullRefresh = true;
     _currentFontSize = 1;

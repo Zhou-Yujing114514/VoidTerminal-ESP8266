@@ -19,7 +19,7 @@
 #define SD_CS     5
 #define KEY_MENU  12   // 按键1（左/Home）- 注意：避免与其他功能冲突
 #define KEY_UP    0    // 按键2（中/上一页）- 与 EPD_DC 共用，读取时注意
-#define KEY_DOWN  5    // 按键3（右/下一页）- 与 SD_CS 共用
+#define KEY_DOWN  3    // 按键3（右/下一页）- SD卡版改为GPIO3(RX引脚)，不与SD_CS冲突
 
 // ===== 屏幕参数 =====
 #define SCREEN_W 296
