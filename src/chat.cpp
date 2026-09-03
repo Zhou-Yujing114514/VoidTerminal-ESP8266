@@ -606,7 +606,7 @@ void ChatManager::drawChatView() {
         ChatMessage& msg = _messages[i];
         char senderLine[64];
         snprintf(senderLine, sizeof(senderLine), "%s:", msg.fromName);
-        y -= 10;
+        y -= 16;
         if (y < 18) break;
         if (msg.isMe) {
             int w = disp.getTextWidth(senderLine);
@@ -614,34 +614,32 @@ void ChatManager::drawChatView() {
         } else {
             disp.drawText(4, y, senderLine, 1);
         }
-        char line[40];
-        int lineIdx = 0;
-        int contentLen = strlen(msg.content);
-        for (int j = 0; j < contentLen; j++) {
-            line[lineIdx++] = msg.content[j];
-            if (lineIdx >= 28 || msg.content[j] == '\n') {
-                line[lineIdx] = 0;
-                y -= 10;
-                if (y < 18) break;
-                if (msg.isMe) {
-                    int w = disp.getTextWidth(line);
-                    disp.drawText(SCREEN_W - w - 8, y, line, 1);
-                } else {
-                    disp.drawText(8, y, line, 1);
-                }
-                lineIdx = 0;
-            }
+        // 消息内容 UTF-8 安全分行
+        int lineLens[8];
+        int lineCount = 0;
+        int cpos = 0;
+        while (msg.content[cpos] && lineCount < 8) {
+            int lb = disp.measureLine(msg.content + cpos, SCREEN_W - 16);
+            if (lb <= 0) break;
+            lineLens[lineCount++] = lb;
+            cpos += lb;
         }
-        if (lineIdx > 0 && y >= 18) {
-            line[lineIdx] = 0;
-            y -= 10;
-            if (y >= 18) {
-                if (msg.isMe) {
-                    int w = disp.getTextWidth(line);
-                    disp.drawText(SCREEN_W - w - 8, y, line, 1);
-                } else {
-                    disp.drawText(8, y, line, 1);
-                }
+        cpos = 0;
+        for (int k = 0; k < lineCount; k++) {
+            y -= 16;
+            if (y < 18) break;
+            int n = lineLens[k];
+            if (n > 63) n = 63;
+            char line[64];
+            memcpy(line, msg.content + cpos, n);
+            if (n > 0 && line[n-1] == '\n') n--;
+            line[n] = 0;
+            cpos += lineLens[k];
+            if (msg.isMe) {
+                int w = disp.getTextWidth(line);
+                disp.drawText(SCREEN_W - w - 8, y, line, 1);
+            } else {
+                disp.drawText(8, y, line, 1);
             }
         }
         visibleCount++;
@@ -699,22 +697,21 @@ void ChatManager::drawInputKeyboard() {
     int inputH = contentH - candH - 2 - 30; // 减去发送按钮高度
     disp.drawRect(0, inputY, leftW, inputH, false);
     if (_inputBufferLen > 0) {
-        // 简单换行显示已输入文字
-        char line[20];
-        int lineIdx = 0;
+        // 按 UTF-8 边界自动换行显示已输入文字
         int y = inputY + 2;
-        for (int i = 0; i < _inputBufferLen && y < inputY + inputH - 10; i++) {
-            line[lineIdx++] = _inputBuffer[i];
-            if (lineIdx >= 12 || _inputBuffer[i] == '\n') {
-                line[lineIdx] = 0;
-                disp.drawText(2, y, line, 1);
-                y += 10;
-                lineIdx = 0;
-            }
-        }
-        if (lineIdx > 0 && y < inputY + inputH - 10) {
-            line[lineIdx] = 0;
+        int cpos = 0;
+        while (cpos < _inputBufferLen && y < inputY + inputH - 10) {
+            int lb = disp.measureLine(_inputBuffer + cpos, leftW - 4);
+            if (lb <= 0) { cpos++; continue; }
+            int n = lb;
+            if (n > 31) n = 31;
+            char line[32];
+            memcpy(line, _inputBuffer + cpos, n);
+            if (n > 0 && line[n-1] == '\n') n--;
+            line[n] = 0;
             disp.drawText(2, y, line, 1);
+            y += 16;
+            cpos += lb;
         }
     } else {
         disp.drawText(2, inputY + 10, "已输入:", 1);
