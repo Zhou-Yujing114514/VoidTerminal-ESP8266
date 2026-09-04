@@ -1,4 +1,10 @@
 #include "chat.h"
+
+// 服务器证书 SHA1 指纹（二进制 20 字节），供 beginSSL 与 setFingerprint 使用
+static const uint8_t chatSslFingerprint[20] = {
+    0x1C,0x86,0x71,0xD8,0xC7,0x8C,0xC4,0xBA,0x58,0x43,
+    0xB6,0x12,0xFF,0x36,0x4E,0x63,0x7E,0x51,0xFA,0xE1
+};
 #include <pgmspace.h>
 
 ChatManager chat;
@@ -788,7 +794,7 @@ void ChatManager::drawLetterSelector() {
 
 void ChatManager::connectWebSocket() {
     if (WiFi.status() != WL_CONNECTED) return;
-    _webSocket.begin(CHAT_SERVER, CHAT_PORT, "/ws");
+    _webSocket.beginSSL(CHAT_SERVER, CHAT_PORT, "/ws", chatSslFingerprint);
     _webSocket.onEvent(wsEventCallback);
     _webSocket.setReconnectInterval(5000);
     _wsConnected = true;
@@ -895,9 +901,12 @@ void ChatManager::handleChatMessage(JsonObject root) {
 
 bool ChatManager::login(const char* username, const char* password) {
     if (WiFi.status() != WL_CONNECTED) return false;
-    WiFiClient client;
+    WiFiClientSecure client;
+    client.setFingerprint(chatSslFingerprint);
+    client.setTimeout(5000);
     HTTPClient http;
-    String url = String("http://") + CHAT_SERVER + "/api/login";
+    http.setTimeout(5000);
+    String url = String("https://") + CHAT_SERVER + "/api/login";
     http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
     StaticJsonDocument<256> doc;

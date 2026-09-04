@@ -27,7 +27,9 @@
 
 // ===== 服务器配置 =====
 #define CHAT_SERVER "buer.kdns.fr"
-#define CHAT_PORT 80
+#define CHAT_PORT 443          // HTTPS 端口（80端口已被服务器关闭）
+// 服务器 TLS 证书 SHA1 指纹（十六进制），用于 beginSSL 与 setFingerprint
+#define CHAT_SSL_FINGERPRINT_HEX "1C:86:71:D8:C7:8C:C4:BA:58:43:B6:12:FF:36:4E:63:7E:51:FA:E1"
 #define MONITOR_SERVER "cn-fj-qz-1.server.zakocloud.com"
 #define MONITOR_PORT 18080
 
