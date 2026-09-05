@@ -518,8 +518,8 @@ void ChatManager::addMessage(const char* from, const char* fromName, const char*
     _messages[_messageCount].from[31] = 0;
     strncpy(_messages[_messageCount].fromName, fromName, 31);
     _messages[_messageCount].fromName[31] = 0;
-    strncpy(_messages[_messageCount].content, content, 255);
-    _messages[_messageCount].content[255] = 0;
+    strncpy(_messages[_messageCount].content, content, 63);
+    _messages[_messageCount].content[63] = 0;
     _messages[_messageCount].isMe = isMe;
     _messages[_messageCount].time = millis();
     _messageCount++;
@@ -767,7 +767,7 @@ void ChatManager::drawInputKeyboard() {
     }
     
     // 底部状态栏
-    disp.drawStatusBar("短按1:删字 双击1:退出 长按键2:发送", nullptr);
+    disp.drawStatusBar("1:删/退 2:移/发送 3:移/选字", nullptr);
     disp.refresh(true);
 }
 
@@ -790,7 +790,7 @@ void ChatManager::drawLetterSelector() {
         disp.drawText(x + boxW/2 - 4, 52, letter, 2);
         if (selected) display.setTextColor(COLOR_BLACK);
     }
-    disp.drawStatusBar("上/下:选择 双击下:确认 短按上:取消", nullptr);
+    disp.drawStatusBar("3:下一个 双击3:上一个 长按3:确认 2:返回", nullptr);
     disp.refresh(true);
 }
 
@@ -1037,28 +1037,17 @@ void ChatManager::confirmCandidate() {
     if (_candidateIndex < currentCandidateCount) {
         const char* cand = currentCandidates[_candidateIndex];
         int candLen = strlen(cand);
-        if (_inputBufferLen + candLen < 250) {
+        if (_inputBufferLen + candLen < 63) {
             strcpy(_inputBuffer + _inputBufferLen, cand);
             _inputBufferLen += candLen;
         }
     }
+    // 上屏后清空拼音，回到九宫格继续输入（不立即发送，由长按按键2发送）
     _pinyinLen = 0;
     _pinyin[0] = 0;
     currentCandidateCount = 0;
     _candidateIndex = 0;
-    if (_inputBufferLen > 0) {
-        Conversation* conv = getCurrentConversation();
-        if (conv) {
-            sendWsMessage("message", conv->id, _inputBuffer);
-            addMessage(_userId, _userName, _inputBuffer, true);
-        }
-        _inputBufferLen = 0;
-        _inputBuffer[0] = 0;
-        _inputMode = INPUT_NONE;
-        drawChatView();
-    } else {
-        drawInputKeyboard();
-    }
+    drawInputKeyboard();
 }
 
 void ChatManager::handleKey(KeyEvent evt) {
@@ -1139,15 +1128,43 @@ void ChatManager::handleKey(KeyEvent evt) {
                 drawConversationList();
             }
         } else if (_inputMode == INPUT_GRID) {
+            // 九宫格光标移动：单击上下，双击左右，长按确认
             if (evt == KEY_UP_SHORT) {
+                // 按键2单击：上移一行
                 if (_gridCursor >= 3) _gridCursor -= 3;
                 drawInputKeyboard();
             } else if (evt == KEY_DOWN_SHORT) {
+                // 按键3单击：下移一行
                 if (_gridCursor < 6) _gridCursor += 3;
                 drawInputKeyboard();
+            } else if (evt == KEY_UP_DOUBLE) {
+                // 按键2双击：左移一列（同行内循环）
+                int col = _gridCursor % 3;
+                if (col > 0) _gridCursor--;
+                else _gridCursor += 2;
+                drawInputKeyboard();
+            } else if (evt == KEY_DOWN_DOUBLE) {
+                // 按键3双击：右移一列（同行内循环）
+                int col = _gridCursor % 3;
+                if (col < 2) _gridCursor++;
+                else _gridCursor -= 2;
+                drawInputKeyboard();
+            } else if (evt == KEY_DOWN_LONG) {
+                // 按键3长按：有候选词则上屏，否则进入字母选择
+                if (currentCandidateCount > 0 && _pinyinLen > 0) {
+                    confirmCandidate();
+                } else {
+                    _inputMode = INPUT_LETTER;
+                    _letterCursor = 0;
+                    drawLetterSelector();
+                }
             } else if (evt == KEY_UP_LONG) {
-                // 长按按键2：发送消息
-                if (_inputBufferLen > 0) {
+                // 按键2长按：有候选词时切换候选词，无候选词时发送消息
+                if (currentCandidateCount > 1) {
+                    _candidateIndex = (_candidateIndex + 1) % currentCandidateCount;
+                    drawInputKeyboard();
+                } else if (_inputBufferLen > 0) {
+                    // 发送消息
                     Conversation* conv = getCurrentConversation();
                     if (conv) {
                         sendWsMessage("message", conv->id, _inputBuffer);
@@ -1158,29 +1175,13 @@ void ChatManager::handleKey(KeyEvent evt) {
                     _pinyinLen = 0;
                     _pinyin[0] = 0;
                     currentCandidateCount = 0;
+                    _candidateIndex = 0;
                     _inputMode = INPUT_NONE;
                     drawChatView();
                 }
-            } else if (evt == KEY_UP_DOUBLE) {
-                // 双击按键2：切换候选词
-                if (currentCandidateCount > 0) {
-                    _candidateIndex = (_candidateIndex + 1) % currentCandidateCount;
-                    drawInputKeyboard();
-                }
-            } else if (evt == KEY_DOWN_LONG) {
-                if (currentCandidateCount > 0 && _pinyinLen > 0) {
-                    confirmCandidate();
-                } else {
-                    _inputMode = INPUT_LETTER;
-                    _letterCursor = 0;
-                    drawLetterSelector();
-                }
-            } else if (evt == KEY_DOWN_DOUBLE) {
-                _inputMode = INPUT_LETTER;
-                _letterCursor = 0;
-                drawLetterSelector();
             }
         } else if (_inputMode == INPUT_LETTER) {
+            // 字母选择：按键3单击下一个、双击上一个，长按确认；按键2短按返回
             const char* letters = getGridLetters(_gridCursor);
             int count = strlen(letters);
             if (evt == KEY_UP_SHORT) {
@@ -1189,7 +1190,10 @@ void ChatManager::handleKey(KeyEvent evt) {
             } else if (evt == KEY_DOWN_SHORT) {
                 _letterCursor = (_letterCursor + 1) % count;
                 drawLetterSelector();
-            } else if (evt == KEY_DOWN_LONG || evt == KEY_DOWN_DOUBLE) {
+            } else if (evt == KEY_DOWN_DOUBLE) {
+                _letterCursor = (_letterCursor + count - 1) % count;
+                drawLetterSelector();
+            } else if (evt == KEY_DOWN_LONG) {
                 appendPinyin(letters[_letterCursor]);
                 _inputMode = INPUT_GRID;
                 drawInputKeyboard();
