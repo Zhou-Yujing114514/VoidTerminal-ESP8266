@@ -460,6 +460,7 @@ void ChatManager::init() {
     _userName[0] = 0;
     _token[0] = 0;
     _lastReconnectTime = 0;
+    _diag[0] = 0;
     addConversation("public", "网站问题反馈区", CONV_PUBLIC);
 }
 
@@ -539,10 +540,50 @@ void ChatManager::clearAllCache() {
 
 void ChatManager::drawConnecting() {
     disp.clear();
-    disp.drawTitleBar("虚空终端");
-    disp.drawText(SCREEN_W/2 - 30, SCREEN_H/2 - 10, "连接中...", 2);
-    disp.drawProgressBar(20, SCREEN_H/2 + 15, SCREEN_W - 40, 30);
-    disp.drawStatusBar("正在连接服务器", "Home:返回");
+    disp.drawTitleBar("虚空终端 - 诊断");
+    
+    int y = 22;
+    char line[40];
+    
+    // WiFi 状态
+    if (WiFi.status() == WL_CONNECTED) {
+        snprintf(line, sizeof(line), "WiFi: 已连接");
+    } else {
+        snprintf(line, sizeof(line), "WiFi: 未连接");
+    }
+    disp.drawText(4, y, line, 1);
+    y += 16;
+    
+    // 账号状态
+    char u[CHAT_USERNAME_MAX];
+    char p[CHAT_PASSWORD_MAX];
+    wifiConfig.loadChatAccount(u, CHAT_USERNAME_MAX, p, CHAT_PASSWORD_MAX);
+    if (u[0]) {
+        snprintf(line, sizeof(line), "账号: %s", u);
+    } else {
+        snprintf(line, sizeof(line), "账号: 未配置");
+    }
+    disp.drawText(4, y, line, 1);
+    y += 16;
+    
+    // 登录状态
+    if (_loggedIn && _token[0]) {
+        snprintf(line, sizeof(line), "登录: 成功");
+    } else {
+        snprintf(line, sizeof(line), "登录: 未完成");
+    }
+    disp.drawText(4, y, line, 1);
+    y += 16;
+    
+    // WebSocket 状态
+    snprintf(line, sizeof(line), "WS: %s", _wsConnected ? "已连接" : "未连接");
+    disp.drawText(4, y, line, 1);
+    y += 16;
+    
+    // 诊断详情
+    disp.drawText(4, y, _diag, 1);
+    
+    disp.drawStatusBar("长按2:进入会话列表", "Home:返回");
     disp.refresh(true);
 }
 
@@ -812,6 +853,7 @@ void ChatManager::drawLetterSelector() {
 
 void ChatManager::connectWebSocket() {
     if (WiFi.status() != WL_CONNECTED) {
+        snprintf(_diag, sizeof(_diag), "WS: WiFi未连接");
         Serial.println("[chat] connectWS: WiFi未连接, 跳过");
         return;
     }
@@ -824,10 +866,12 @@ void ChatManager::connectWebSocket() {
             Serial.printf("[chat] 读取到账号[%s], 开始登录\n", u);
             login(u, p);
         } else {
+            snprintf(_diag, sizeof(_diag), "无账号, 跳过登录");
             Serial.println("[chat] 警告: EEPROM无账号密码, 跳过登录");
         }
     }
     Serial.printf("[chat] 连接WebSocket: wss://%s:%d/ws\n", CHAT_SERVER, CHAT_PORT);
+    snprintf(_diag, sizeof(_diag), "连接WS中...");
     _webSocket.beginSSL(CHAT_SERVER, CHAT_PORT, "/ws", chatSslFingerprint);
     _webSocket.onEvent(wsEventCallback);
     _webSocket.setReconnectInterval(5000);
@@ -877,15 +921,19 @@ void ChatManager::handleWsEvent(WStype_t type, uint8_t* payload, size_t length) 
         case WStype_DISCONNECTED:
             _wsConnected = false;
             _loggedIn = false;
+            snprintf(_diag, sizeof(_diag), "WS断开");
             Serial.println("[chat] WS断开");
             break;
         case WStype_CONNECTED:
             _wsConnected = true;
+            snprintf(_diag, sizeof(_diag), "WS已连接");
             Serial.println("[chat] WS连接成功");
             if (_token[0]) {
+                snprintf(_diag, sizeof(_diag), "发送auth...");
                 Serial.println("[chat] 发送auth(lite:true)");
                 sendWsMessage("auth", nullptr, nullptr);
             } else {
+                snprintf(_diag, sizeof(_diag), "无token不发auth");
                 Serial.println("[chat] 无token, 不发auth");
             }
             break;
@@ -893,12 +941,14 @@ void ChatManager::handleWsEvent(WStype_t type, uint8_t* payload, size_t length) 
             Serial.printf("[chat] 收到WS消息 %d字节\n", (int)length);
             DynamicJsonDocument doc(8192);
             if (deserializeJson(doc, payload, length)) {
+                snprintf(_diag, sizeof(_diag), "JSON解析失败");
                 Serial.println("[chat] JSON解析失败!");
                 break;
             }
             const char* msgType = doc["type"] | "";
             Serial.printf("[chat] 消息类型: %s\n", msgType);
             if (strcmp(msgType, "hello") == 0) {
+                snprintf(_diag, sizeof(_diag), "收到hello");
                 Serial.println("[chat] 处理hello");
                 handleHelloMessage(doc.as<JsonObject>());
             } else if (strcmp(msgType, "global") == 0) {
@@ -1006,10 +1056,12 @@ void ChatManager::handleGroupMessage(JsonObject root) {
 
 bool ChatManager::login(const char* username, const char* password) {
     if (WiFi.status() != WL_CONNECTED) {
+        snprintf(_diag, sizeof(_diag), "登录失败: WiFi未连接");
         Serial.println("[chat] login失败: WiFi未连接");
         return false;
     }
     Serial.printf("[chat] 开始登录, 账号=%s\n", username);
+    snprintf(_diag, sizeof(_diag), "正在登录...");
     WiFiClientSecure client;
     client.setFingerprint(chatSslFingerprint);
     client.setTimeout(5000);
@@ -1034,14 +1086,19 @@ bool ChatManager::login(const char* username, const char* password) {
                 strncpy(_token, token, 63);
                 _loggedIn = true;
                 http.end();
+                snprintf(_diag, sizeof(_diag), "登录成功");
                 Serial.println("[chat] 登录成功, token已获取");
                 return true;
             } else {
+                snprintf(_diag, sizeof(_diag), "登录失败: 无token");
                 Serial.println("[chat] 登录失败: 响应无token");
             }
         } else {
+            snprintf(_diag, sizeof(_diag), "登录失败: JSON解析错");
             Serial.println("[chat] 登录失败: JSON解析失败");
         }
+    } else {
+        snprintf(_diag, sizeof(_diag), "登录HTTP=%d", httpCode);
     }
     http.end();
     return false;

@@ -99,6 +99,7 @@ private:
     char _userName[32];
     char _token[64];
     unsigned long _lastReconnectTime;
+    char _diag[128];  // 诊断状态（显示在屏幕上，便于无电脑排查）
     
     // 方法
     void drawConversationList();

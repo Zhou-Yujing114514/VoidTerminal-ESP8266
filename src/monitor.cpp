@@ -9,6 +9,7 @@ void MonitorManager::init() {
     _selectedServer = 0;
     _lastFullRefresh = 0;
     _needFullRefresh = false;
+    _diag[0] = 0;
     for (int i = 0; i < 2; i++) {
         _data[i].valid = false;
         _lastPartialRefresh[i] = 0;
@@ -41,9 +42,20 @@ int MonitorManager::getServerPort(int index) {
 
 void MonitorManager::drawLoading() {
     disp.clear();
-    disp.drawTitleBar("服务器监控");
-    disp.drawText(SCREEN_W/2 - 30, SCREEN_H/2 - 10, "正在加载...", 1);
-    disp.drawProgressBar(20, SCREEN_H/2 + 10, SCREEN_W - 40, 50);
+    disp.drawTitleBar("服务器监控 - 诊断");
+    int y = 24;
+    if (WiFi.status() == WL_CONNECTED) {
+        disp.drawText(4, y, "WiFi: 已连接", 1);
+    } else {
+        disp.drawText(4, y, "WiFi: 未连接", 1);
+    }
+    y += 16;
+    char line[64];
+    snprintf(line, sizeof(line), "服务器: %s", getServerName(_selectedServer));
+    disp.drawText(4, y, line, 1);
+    y += 16;
+    disp.drawText(4, y, _diag, 1);
+    disp.drawStatusBar("长按3:刷新  1:返回", "Home:返回");
     disp.refresh(true);
 }
 
@@ -60,6 +72,7 @@ bool MonitorManager::fetchData(int serverIndex) {
     if (WiFi.status() != WL_CONNECTED) {
         strcpy(_data[serverIndex].status, "WiFi未连接");
         _data[serverIndex].valid = false;
+        snprintf(_diag, sizeof(_diag), "WiFi未连接");
         Serial.println("[mon] fetch失败: WiFi未连接");
         return false;
     }
@@ -69,6 +82,7 @@ bool MonitorManager::fetchData(int serverIndex) {
     HTTPClient http;
     http.setTimeout(8000);
     String url = String("http://") + getServerHost(serverIndex) + ":" + getServerPort(serverIndex) + "/api/status";
+    snprintf(_diag, sizeof(_diag), "请求中...");
     Serial.printf("[mon] 请求: %s\n", url.c_str());
     http.begin(client, url);
     
@@ -77,18 +91,21 @@ bool MonitorManager::fetchData(int serverIndex) {
     if (httpCode != 200) {
         strcpy(_data[serverIndex].status, "连接失败");
         _data[serverIndex].valid = false;
+        snprintf(_diag, sizeof(_diag), "HTTP=%d 失败", httpCode);
         http.end();
         return false;
     }
     
     String payload = http.getString();
     http.end();
+    snprintf(_diag, sizeof(_diag), "收到%d字节", payload.length());
     Serial.printf("[mon] 收到 %d 字节\n", payload.length());
     
     DynamicJsonDocument doc(2048);
     if (deserializeJson(doc, payload)) {
         strcpy(_data[serverIndex].status, "解析失败");
         _data[serverIndex].valid = false;
+        snprintf(_diag, sizeof(_diag), "JSON解析失败");
         Serial.println("[mon] JSON解析失败");
         return false;
     }
