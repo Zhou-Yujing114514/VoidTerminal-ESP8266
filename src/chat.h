@@ -129,6 +129,7 @@ private:
     void deletePinyin();
     void confirmCandidate();
     void loadCandidates();
+    void deleteInputChar();   // UTF-8 安全删除已输入文字的最后一个字符
     
     // 工具
     Conversation* getCurrentConversation();

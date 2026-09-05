@@ -740,12 +740,12 @@ void ChatManager::drawInputKeyboard() {
         disp.drawText(leftW/2 - 12, sendY + 8, "发送", 2);
     }
     
-    // ===== 右边：九宫格键盘 =====
+    // ===== 右边：十二宫格键盘（3x4：9字母 + 删除/空格/发送）=====
     int keyW = rightW / 3;
-    int keyH = contentH / 3;
+    int keyH = contentH / 4;
     int startY = contentY;
     
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 12; i++) {
         int col = i % 3;
         int row = i / 3;
         int x = rightX + col * keyW;
@@ -754,20 +754,36 @@ void ChatManager::drawInputKeyboard() {
         bool selected = (i == _gridCursor);
         if (selected) {
             disp.drawRect(x + 2, y + 2, keyW - 4, keyH - 4, true);
-            display.setTextColor(COLOR_WHITE);
+            u8g2Fonts.setForegroundColor(GxEPD_WHITE);
+            u8g2Fonts.setBackgroundColor(GxEPD_BLACK);
         } else {
             disp.drawRect(x + 2, y + 2, keyW - 4, keyH - 4, false);
         }
         
-        char numStr[2] = {(char)('1' + i), 0};
-        disp.drawText(x + 4, y + 4, numStr, 1);
-        disp.drawText(x + 4, y + 16, getGridLetters(i), 1);
+        if (i < 9) {
+            // 字母格
+            char numStr[2] = {(char)('1' + i), 0};
+            disp.drawText(x + 4, y + 3, numStr, 1);
+            disp.drawText(x + 4, y + 15, getGridLetters(i), 1);
+        } else if (i == 9) {
+            // 删除键
+            disp.drawText(x + keyW/2 - 7, y + keyH/2 - 5, "删", 1);
+        } else if (i == 10) {
+            // 空格键
+            disp.drawText(x + keyW/2 - 14, y + keyH/2 - 5, "空格", 1);
+        } else {
+            // 发送键
+            disp.drawText(x + keyW/2 - 14, y + keyH/2 - 5, "发送", 1);
+        }
         
-        if (selected) display.setTextColor(COLOR_BLACK);
+        if (selected) {
+            u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+            u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+        }
     }
     
     // 底部状态栏
-    disp.drawStatusBar("1:删/退 2:移/发送 3:移/选字", nullptr);
+    disp.drawStatusBar("2/3:移动 长按3:确认 长按2:切换/发送", nullptr);
     disp.refresh(true);
 }
 
@@ -1050,19 +1066,33 @@ void ChatManager::confirmCandidate() {
     drawInputKeyboard();
 }
 
+void ChatManager::deleteInputChar() {
+    if (_pinyinLen > 0) {
+        // 优先删除拼音
+        deletePinyin();
+        return;
+    }
+    if (_inputBufferLen <= 0) return;
+    // UTF-8 安全删除：中文字符占 3 字节，需整体删除
+    if ((unsigned char)_inputBuffer[_inputBufferLen - 1] >= 0x80) {
+        int n = 0;
+        while (_inputBufferLen > 0 && (unsigned char)_inputBuffer[_inputBufferLen - 1] >= 0x80 && n < 3) {
+            _inputBufferLen--;
+            n++;
+        }
+    } else {
+        _inputBufferLen--;
+    }
+    _inputBuffer[_inputBufferLen] = 0;
+}
+
 void ChatManager::handleKey(KeyEvent evt) {
     if (!_active || evt == KEY_NONE) return;
     if (evt == KEY_MENU_SHORT) {
-        // 在输入模式下，短按按键1 = 删除上一个字母
+        // 在输入模式下，短按按键1 = 删除上一个字符
         if (_inputMode != INPUT_NONE) {
-            if (_pinyinLen > 0) {
-                deletePinyin();
-                drawInputKeyboard();
-            } else if (_inputBufferLen > 0) {
-                _inputBufferLen--;
-                _inputBuffer[_inputBufferLen] = 0;
-                drawInputKeyboard();
-            }
+            deleteInputChar();
+            drawInputKeyboard();
             return;
         }
         exit();
@@ -1128,14 +1158,14 @@ void ChatManager::handleKey(KeyEvent evt) {
                 drawConversationList();
             }
         } else if (_inputMode == INPUT_GRID) {
-            // 九宫格光标移动：单击上下，双击左右，长按确认
+            // 十二宫格光标移动：单击上下，双击左右，长按确认
             if (evt == KEY_UP_SHORT) {
                 // 按键2单击：上移一行
                 if (_gridCursor >= 3) _gridCursor -= 3;
                 drawInputKeyboard();
             } else if (evt == KEY_DOWN_SHORT) {
                 // 按键3单击：下移一行
-                if (_gridCursor < 6) _gridCursor += 3;
+                if (_gridCursor < 9) _gridCursor += 3;
                 drawInputKeyboard();
             } else if (evt == KEY_UP_DOUBLE) {
                 // 按键2双击：左移一列（同行内循环）
@@ -1150,13 +1180,44 @@ void ChatManager::handleKey(KeyEvent evt) {
                 else _gridCursor -= 2;
                 drawInputKeyboard();
             } else if (evt == KEY_DOWN_LONG) {
-                // 按键3长按：有候选词则上屏，否则进入字母选择
-                if (currentCandidateCount > 0 && _pinyinLen > 0) {
-                    confirmCandidate();
-                } else {
-                    _inputMode = INPUT_LETTER;
-                    _letterCursor = 0;
-                    drawLetterSelector();
+                // 按键3长按：确认当前格
+                if (_gridCursor < 9) {
+                    // 字母格：有候选词则上屏，否则进入字母选择
+                    if (currentCandidateCount > 0 && _pinyinLen > 0) {
+                        confirmCandidate();
+                    } else {
+                        _inputMode = INPUT_LETTER;
+                        _letterCursor = 0;
+                        drawLetterSelector();
+                    }
+                } else if (_gridCursor == 9) {
+                    // 删除键
+                    deleteInputChar();
+                    drawInputKeyboard();
+                } else if (_gridCursor == 10) {
+                    // 空格键
+                    if (_inputBufferLen < 63) {
+                        _inputBuffer[_inputBufferLen++] = ' ';
+                        _inputBuffer[_inputBufferLen] = 0;
+                    }
+                    drawInputKeyboard();
+                } else if (_gridCursor == 11) {
+                    // 发送键
+                    if (_inputBufferLen > 0) {
+                        Conversation* conv = getCurrentConversation();
+                        if (conv) {
+                            sendWsMessage("message", conv->id, _inputBuffer);
+                            addMessage(_userId, _userName, _inputBuffer, true);
+                        }
+                        _inputBufferLen = 0;
+                        _inputBuffer[0] = 0;
+                        _pinyinLen = 0;
+                        _pinyin[0] = 0;
+                        currentCandidateCount = 0;
+                        _candidateIndex = 0;
+                        _inputMode = INPUT_NONE;
+                        drawChatView();
+                    }
                 }
             } else if (evt == KEY_UP_LONG) {
                 // 按键2长按：有候选词时切换候选词，无候选词时发送消息
