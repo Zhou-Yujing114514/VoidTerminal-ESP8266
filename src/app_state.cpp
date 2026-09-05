@@ -1,4 +1,5 @@
 #include "app_state.h"
+#include "wifi_config.h"
 
 AppStateManager app;
 
@@ -12,6 +13,7 @@ const char* menuNames[MENU_COUNT] = {
 void AppStateManager::init() {
     _currentState = STATE_BOOT;
     _previousState = STATE_BOOT;
+    _pendingTarget = STATE_MENU;
     _menuIndex = 0;
     _needRedraw = true;
     drawBootScreen();
@@ -38,6 +40,16 @@ void AppStateManager::setState(AppState state) {
 void AppStateManager::goHome() {
     if (_currentState != STATE_MENU) {
         setState(STATE_MENU);
+    }
+}
+
+void AppStateManager::enterOrSelectWifi(AppState target) {
+    // WiFi 已连接则直接进入目标；否则先弹 WiFi 选择界面
+    if (wifiConfig.isWifiConnected()) {
+        setState(target);
+    } else {
+        _pendingTarget = target;
+        setState(STATE_WIFI_SELECT);
     }
 }
 
@@ -109,10 +121,18 @@ void AppStateManager::handleKey(KeyEvent evt) {
             } else if (evt == KEY_DOWN_LONG) {
                 // 长按确认进入
                 switch (_menuIndex) {
-                    case MENU_CHAT: setState(STATE_CHAT); break;
-                    case MENU_MONITOR: setState(STATE_MONITOR); break;
-                    case MENU_CLOCK: setState(STATE_CLOCK); break;
-                    case MENU_CONFIG: setState(STATE_CONFIG); break;
+                    case MENU_CHAT:
+                        enterOrSelectWifi(STATE_CHAT);
+                        break;
+                    case MENU_MONITOR:
+                        enterOrSelectWifi(STATE_MONITOR);
+                        break;
+                    case MENU_CLOCK:
+                        enterOrSelectWifi(STATE_CLOCK);
+                        break;
+                    case MENU_CONFIG:
+                        setState(STATE_CONFIG);
+                        break;
                 }
             }
             break;

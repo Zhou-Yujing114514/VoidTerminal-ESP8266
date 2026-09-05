@@ -14,6 +14,7 @@ WifiConfigManager wifiConfig;
 void WifiConfigManager::init() {
     _active = false;
     _apMode = false;
+    _wifiSelecting = false;
     _server = nullptr;
     _httpUpdater = nullptr;
     _selectedPreset = 0;
@@ -219,6 +220,109 @@ void WifiConfigManager::drawConfigMenu() {
     
     disp.drawStatusBar("上/下:选择  长按下:进入AP模式  短按上:连接预设", "Home:返回");
     disp.refresh(true);
+}
+
+void WifiConfigManager::enterWifiSelect() {
+    _wifiSelecting = true;
+    _selectedPreset = 0;
+    drawWifiSelect();
+}
+
+void WifiConfigManager::drawWifiSelect() {
+    disp.clear();
+    disp.drawTitleBar("选择 WiFi");
+    
+    disp.drawText(4, 28, "请选择要连接的 WiFi:", 1);
+    
+    int y = 44;
+    int validCount = 0;
+    for (int i = 0; i < MAX_WIFI_PRESETS; i++) {
+        if (!_presets[i].valid) continue;
+        validCount++;
+        bool selected = (i == _selectedPreset);
+        if (selected) {
+            disp.drawRect(2, y - 2, SCREEN_W - 4, 16, true);
+            u8g2Fonts.setForegroundColor(GxEPD_WHITE);
+            u8g2Fonts.setBackgroundColor(GxEPD_BLACK);
+        }
+        char line[64];
+        snprintf(line, sizeof(line), "  %s", _presets[i].ssid);
+        disp.drawText(8, y, line, 1);
+        if (selected) {
+            u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+            u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+        }
+        y += 16;
+    }
+    
+    if (validCount == 0) {
+        disp.drawText(8, 60, "无预设 WiFi，请先配网", 1);
+        disp.drawText(8, 78, "长按下键进入配网设置", 1);
+    }
+    
+    disp.drawStatusBar("上/下:选择  长按下:连接", "Home:返回");
+    disp.refresh(true);
+}
+
+void WifiConfigManager::handleWifiSelectKey(KeyEvent evt) {
+    if (evt == KEY_NONE) return;
+    
+    if (evt == KEY_MENU_SHORT) {
+        // 返回主页
+        _wifiSelecting = false;
+        app.goHome();
+        return;
+    }
+    
+    if (evt == KEY_UP_SHORT) {
+        // 上一个有效预设
+        int prev = _selectedPreset - 1;
+        while (prev >= 0 && !_presets[prev].valid) prev--;
+        if (prev >= 0) {
+            _selectedPreset = prev;
+            drawWifiSelect();
+        }
+    } else if (evt == KEY_DOWN_SHORT) {
+        // 下一个有效预设
+        int next = _selectedPreset + 1;
+        while (next < MAX_WIFI_PRESETS && !_presets[next].valid) next++;
+        if (next < MAX_WIFI_PRESETS) {
+            _selectedPreset = next;
+            drawWifiSelect();
+        }
+    } else if (evt == KEY_DOWN_LONG) {
+        // 长按连接选中的预设
+        if (_presets[_selectedPreset].valid) {
+            disp.clear();
+            disp.drawTitleBar("连接 WiFi");
+            char line[64];
+            snprintf(line, sizeof(line), "正在连接 %s ...", _presets[_selectedPreset].ssid);
+            disp.drawText(10, 40, line, 1);
+            disp.drawProgressBar(20, 60, SCREEN_W - 40, 50);
+            disp.refresh(true);
+            
+            if (tryConnectPreset(_selectedPreset)) {
+                // 连接成功，自动进入目标工具
+                _wifiSelecting = false;
+                app.setState(app.getPendingTarget());
+            } else {
+                // 连接失败
+                drawWifiSelect();
+                disp.drawText(4, SCREEN_H - 28, "连接失败，请重试", 1);
+                disp.refresh(true);
+            }
+        }
+    } else if (evt == KEY_UP_LONG) {
+        // 长按上键：无预设时进入配网设置
+        bool hasValid = false;
+        for (int i = 0; i < MAX_WIFI_PRESETS; i++) {
+            if (_presets[i].valid) { hasValid = true; break; }
+        }
+        if (!hasValid) {
+            _wifiSelecting = false;
+            app.setState(STATE_CONFIG);
+        }
+    }
 }
 
 void WifiConfigManager::drawApMode() {
