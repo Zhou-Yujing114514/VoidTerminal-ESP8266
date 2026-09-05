@@ -876,7 +876,7 @@ void ChatManager::handleWsEvent(WStype_t type, uint8_t* payload, size_t length) 
             if (_token[0]) sendWsMessage("auth", nullptr, nullptr);
             break;
         case WStype_TEXT: {
-            StaticJsonDocument<4096> doc;
+            DynamicJsonDocument doc(8192);
             if (deserializeJson(doc, payload, length)) break;
             const char* msgType = doc["type"] | "";
             if (strcmp(msgType, "hello") == 0) {
