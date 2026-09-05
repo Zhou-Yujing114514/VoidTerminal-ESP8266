@@ -13,6 +13,7 @@ enum AppState {
     STATE_MONITOR,      // 服务器监控
     STATE_CLOCK,        // 时钟
     STATE_CONFIG,       // 配网设置
+    STATE_WIFI_SELECT,  // WiFi 选择（打开工具前自动弹出）
     STATE_SHUTDOWN      // 关机/休眠
 };
 
@@ -34,16 +35,20 @@ public:
     AppState getCurrentState() { return _currentState; }
     void setState(AppState state);
     void goHome();  // 回主页
+    AppState getPendingTarget() { return _pendingTarget; }
+    void setPendingTarget(AppState state) { _pendingTarget = state; }
     
 private:
     AppState _currentState;
     AppState _previousState;
+    AppState _pendingTarget;  // WiFi 选择完成后要进入的目标状态
     int _menuIndex;
     bool _needRedraw;
     
     void drawMenu();
     void drawBootScreen();
     const char* getMenuName(int index);
+    void enterOrSelectWifi(AppState target);
 };
 
 extern AppStateManager app;

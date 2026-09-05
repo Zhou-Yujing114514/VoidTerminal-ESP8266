@@ -30,6 +30,11 @@ public:
     bool isWifiConnected() { return WiFi.status() == WL_CONNECTED; }
     // 非阻塞确保已连接：已连接直接返回true；否则发起连接（后台完成）并返回false
     bool ensureConnected();
+    // WiFi 选择界面（打开工具前弹出）
+    void enterWifiSelect();
+    void handleWifiSelectKey(KeyEvent evt);
+    void drawWifiSelect();
+    bool isWifiSelecting() { return _wifiSelecting; }
     // 聊天账号密码（存储在EEPROM，配网网页配置）
     bool saveChatAccount(const char* username, const char* password);
     void loadChatAccount(char* username, int uMax, char* password, int pMax);
@@ -38,6 +43,7 @@ public:
 private:
     bool _active;
     bool _apMode;
+    bool _wifiSelecting;     // 正在 WiFi 选择界面
     ESP8266WebServer* _server;
     ESP8266HTTPUpdateServer* _httpUpdater;
     WifiPreset _presets[MAX_WIFI_PRESETS];

@@ -89,6 +89,10 @@ void loop() {
             wifiConfig.update();
             break;
             
+        case STATE_WIFI_SELECT:
+            wifiConfig.handleWifiSelectKey(evt);
+            break;
+            
         default:
             app.handleKey(evt);
             break;
@@ -115,6 +119,7 @@ void loop() {
             case STATE_MONITOR: monitor.enter(); break;
             case STATE_CLOCK: clockMgr.enter(); break;
             case STATE_CONFIG: wifiConfig.enter(); break;
+            case STATE_WIFI_SELECT: wifiConfig.enterWifiSelect(); break;
             default: break;
         }
     }
