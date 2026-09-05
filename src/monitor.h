@@ -36,18 +36,19 @@ public:
     
 private:
     bool _active;
-    bool _firstLoad;  // 首次加载标记（异步加载用）
-    MonitorData _data;
-    unsigned long _lastFullRefresh;
-    unsigned long _lastPartialRefresh;
     int _selectedServer;
-    bool _needRedraw;
+    MonitorData _data[2];
+    unsigned long _lastPartialRefresh[2];
+    unsigned long _lastFullRefresh;
+    bool _needFullRefresh;
     
-    void drawMonitor();
-    void drawPartialUpdate();
-    bool fetchData();
+    void drawMonitor(bool fullRefresh);
+    bool fetchData(int serverIndex);
     void drawLoading();
     void drawError(const char* msg);
+    const char* getServerName(int index);
+    const char* getServerHost(int index);
+    int getServerPort(int index);
 };
 
 extern MonitorManager monitor;
