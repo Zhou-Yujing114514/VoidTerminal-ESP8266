@@ -90,6 +90,22 @@ bool WifiConfigManager::connectWifi() {
     return false;
 }
 
+bool WifiConfigManager::ensureConnected() {
+    // 已连接则直接返回
+    if (WiFi.status() == WL_CONNECTED) return true;
+    // 正在连接中（WiFi.begin 已发起）也返回 false，让调用方稍后再试
+    // 遍历预设，用第一个有效的发起连接（WiFi.begin 非阻塞，后台完成）
+    for (int i = 0; i < MAX_WIFI_PRESETS; i++) {
+        if (_presets[i].valid) {
+            WiFi.mode(WIFI_STA);
+            WiFi.begin(_presets[i].ssid, _presets[i].password);
+            return false;
+        }
+    }
+    // 无有效预设
+    return false;
+}
+
 void WifiConfigManager::enter() {
     _active = true;
     _needRedraw = true;

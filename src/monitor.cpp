@@ -1,4 +1,5 @@
 #include "monitor.h"
+#include "wifi_config.h"
 #include <ArduinoJson.h>
 
 MonitorManager monitor;
@@ -18,6 +19,7 @@ void MonitorManager::enter() {
     _needRedraw = true;
     _data.valid = false;
     _firstLoad = true;  // 标记首次加载，在update()中异步获取
+    wifiConfig.ensureConnected();  // 自动尝试连接 WiFi
     drawLoading();
 }
 
@@ -189,6 +191,11 @@ void MonitorManager::handleKey(KeyEvent evt) {
 
 void MonitorManager::update() {
     if (!_active) return;
+    
+    // WiFi 未连接时持续尝试（后台连接）
+    if (WiFi.status() != WL_CONNECTED) {
+        wifiConfig.ensureConnected();
+    }
     
     // 首次加载：异步获取数据（避免enter()阻塞）
     if (_firstLoad) {
