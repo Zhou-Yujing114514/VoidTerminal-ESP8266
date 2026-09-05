@@ -1147,21 +1147,10 @@ void ChatManager::deleteInputChar() {
 void ChatManager::handleKey(KeyEvent evt) {
     if (!_active || evt == KEY_NONE) return;
     if (evt == KEY_MENU_SHORT) {
-        // 按键1短按 = 返回首页（任何模式下都返回，不再删除）
+        // 按键1短按 = 返回首页（任何模式下都返回）
         exit();
         app.goHome();
         return;
-    }
-    if (evt == KEY_MENU_DOUBLE) {
-        // 双击按键1 = 退出输入模式
-        if (_inputMode != INPUT_NONE) {
-            _inputMode = INPUT_NONE;
-            _pinyinLen = 0;
-            _pinyin[0] = 0;
-            currentCandidateCount = 0;
-            drawChatView();
-            return;
-        }
     }
     if (_view == CHAT_VIEW_LIST) {
         if (evt == KEY_UP_SHORT) {
@@ -1273,10 +1262,16 @@ void ChatManager::handleKey(KeyEvent evt) {
                     }
                 }
             } else if (evt == KEY_UP_LONG) {
-                // 按键2长按：仅切换候选词（发送已移到最后一行的发送键）
+                // 按键2长按：有候选词切换候选词，无候选词退出输入模式
                 if (currentCandidateCount > 1) {
                     _candidateIndex = (_candidateIndex + 1) % currentCandidateCount;
                     drawInputKeyboard();
+                } else {
+                    _inputMode = INPUT_NONE;
+                    _pinyinLen = 0;
+                    _pinyin[0] = 0;
+                    currentCandidateCount = 0;
+                    drawChatView();
                 }
             }
         } else if (_inputMode == INPUT_LETTER) {

@@ -27,17 +27,17 @@ private:
     unsigned long _menuPressTime;
     unsigned long _upPressTime;
     unsigned long _downPressTime;
-    unsigned long _upLastReleaseTime;
-    unsigned long _downLastReleaseTime;
-    unsigned long _menuLastReleaseTime;
-    unsigned long _lastConflictReadTime;  // 上次读取冲突引脚的时间（用于降频）
-    unsigned long _upFirstLowTime;        // 按键2第一次读到 LOW 的时间（用于二次确认）
-    unsigned long _downFirstLowTime;      // 按键3第一次读到 LOW 的时间
+    unsigned long _upReleaseTime;       // 按键2释放时间（用于延迟短按）
+    unsigned long _downReleaseTime;     // 按键3释放时间
+    unsigned long _upFirstLowTime;      // 按键2第一次读到 LOW 的时间
+    unsigned long _downFirstLowTime;    // 按键3第一次读到 LOW 的时间
     bool _menuPressed;
     bool _upPressed;
     bool _downPressed;
     bool _upLongFired;
     bool _downLongFired;
+    bool _upPending;      // 按键2有待确认的短按（等待双击窗口）
+    bool _downPending;    // 按键3有待确认的短按
     KeyEvent _pendingEvent;
     
     int readPinSafe(int pin);
