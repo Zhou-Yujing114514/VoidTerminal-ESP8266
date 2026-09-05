@@ -64,9 +64,9 @@ bool MonitorManager::fetchData(int serverIndex) {
     }
     
     WiFiClient client;
-    client.setTimeout(3000);
+    client.setTimeout(8000);
     HTTPClient http;
-    http.setTimeout(3000);
+    http.setTimeout(8000);
     String url = String("http://") + getServerHost(serverIndex) + ":" + getServerPort(serverIndex) + "/api/status";
     http.begin(client, url);
     
@@ -81,7 +81,7 @@ bool MonitorManager::fetchData(int serverIndex) {
     String payload = http.getString();
     http.end();
     
-    StaticJsonDocument<1024> doc;
+    DynamicJsonDocument doc(2048);
     if (deserializeJson(doc, payload)) {
         strcpy(_data[serverIndex].status, "解析失败");
         _data[serverIndex].valid = false;
