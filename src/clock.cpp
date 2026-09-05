@@ -1,4 +1,5 @@
 #include "clock.h"
+#include "wifi_config.h"
 
 ClockManager clockMgr;
 
@@ -17,6 +18,7 @@ void ClockManager::init() {
 void ClockManager::enter() {
     _active = true;
     _lastUpdate = 0;
+    wifiConfig.ensureConnected();  // 自动尝试连接 WiFi
     if (!_timeSynced) {
         syncTime();
     }
@@ -118,6 +120,11 @@ void ClockManager::handleKey(KeyEvent evt) {
 
 void ClockManager::update() {
     if (!_active) return;
+    
+    // WiFi 未连接时持续尝试（后台连接）
+    if (WiFi.status() != WL_CONNECTED) {
+        wifiConfig.ensureConnected();
+    }
     
     // 每秒更新一次显示
     if (millis() - _lastUpdate > 1000) {

@@ -28,6 +28,8 @@ public:
     bool isActive() { return _active; }
     bool connectWifi();
     bool isWifiConnected() { return WiFi.status() == WL_CONNECTED; }
+    // 非阻塞确保已连接：已连接直接返回true；否则发起连接（后台完成）并返回false
+    bool ensureConnected();
     
 private:
     bool _active;

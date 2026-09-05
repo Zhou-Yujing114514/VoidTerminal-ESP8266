@@ -1,4 +1,5 @@
 #include "chat.h"
+#include "wifi_config.h"
 
 // 服务器证书 SHA1 指纹（二进制 20 字节），供 beginSSL 与 setFingerprint 使用
 static const uint8_t chatSslFingerprint[20] = {
@@ -466,6 +467,7 @@ void ChatManager::enter() {
     _active = true;
     _view = CHAT_VIEW_LIST;
     _selectedConv = 0;
+    wifiConfig.ensureConnected();  // 自动尝试连接 WiFi
     if (!_wsConnected) {
         drawConnecting();
         connectWebSocket();
@@ -1189,6 +1191,10 @@ void ChatManager::handleKey(KeyEvent evt) {
 
 void ChatManager::update() {
     if (!_active) return;
+    // WiFi 未连接时持续尝试（后台连接）
+    if (WiFi.status() != WL_CONNECTED) {
+        wifiConfig.ensureConnected();
+    }
     if (_wsConnected) {
         _webSocket.loop();
     } else if (millis() - _lastReconnectTime > 5000) {
