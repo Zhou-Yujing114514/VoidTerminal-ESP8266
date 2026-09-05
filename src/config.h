@@ -42,6 +42,8 @@
 
 // ===== 存储配置 =====
 #define EEPROM_SIZE 512
+#define CHAT_USERNAME_MAX 32
+#define CHAT_PASSWORD_MAX 64
 
 // ===== 按键时长 =====
 #define KEY_DEBOUNCE_MS 50
