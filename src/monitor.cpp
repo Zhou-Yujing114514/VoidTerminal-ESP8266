@@ -60,6 +60,7 @@ bool MonitorManager::fetchData(int serverIndex) {
     if (WiFi.status() != WL_CONNECTED) {
         strcpy(_data[serverIndex].status, "WiFi未连接");
         _data[serverIndex].valid = false;
+        Serial.println("[mon] fetch失败: WiFi未连接");
         return false;
     }
     
@@ -68,9 +69,11 @@ bool MonitorManager::fetchData(int serverIndex) {
     HTTPClient http;
     http.setTimeout(8000);
     String url = String("http://") + getServerHost(serverIndex) + ":" + getServerPort(serverIndex) + "/api/status";
+    Serial.printf("[mon] 请求: %s\n", url.c_str());
     http.begin(client, url);
     
     int httpCode = http.GET();
+    Serial.printf("[mon] HTTP状态码: %d\n", httpCode);
     if (httpCode != 200) {
         strcpy(_data[serverIndex].status, "连接失败");
         _data[serverIndex].valid = false;
@@ -80,11 +83,13 @@ bool MonitorManager::fetchData(int serverIndex) {
     
     String payload = http.getString();
     http.end();
+    Serial.printf("[mon] 收到 %d 字节\n", payload.length());
     
     DynamicJsonDocument doc(2048);
     if (deserializeJson(doc, payload)) {
         strcpy(_data[serverIndex].status, "解析失败");
         _data[serverIndex].valid = false;
+        Serial.println("[mon] JSON解析失败");
         return false;
     }
     
