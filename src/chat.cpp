@@ -783,7 +783,7 @@ void ChatManager::drawInputKeyboard() {
     }
     
     // 底部状态栏
-    disp.drawStatusBar("2/3:移动 长按3:确认 长按2:切换/发送", nullptr);
+    disp.drawStatusBar("2/3:移动 长按3:确认 长按2:切换候选", nullptr);
     disp.refresh(true);
 }
 
@@ -1089,12 +1089,7 @@ void ChatManager::deleteInputChar() {
 void ChatManager::handleKey(KeyEvent evt) {
     if (!_active || evt == KEY_NONE) return;
     if (evt == KEY_MENU_SHORT) {
-        // 在输入模式下，短按按键1 = 删除上一个字符
-        if (_inputMode != INPUT_NONE) {
-            deleteInputChar();
-            drawInputKeyboard();
-            return;
-        }
+        // 按键1短按 = 返回首页（任何模式下都返回，不再删除）
         exit();
         app.goHome();
         return;
@@ -1220,25 +1215,10 @@ void ChatManager::handleKey(KeyEvent evt) {
                     }
                 }
             } else if (evt == KEY_UP_LONG) {
-                // 按键2长按：有候选词时切换候选词，无候选词时发送消息
+                // 按键2长按：仅切换候选词（发送已移到最后一行的发送键）
                 if (currentCandidateCount > 1) {
                     _candidateIndex = (_candidateIndex + 1) % currentCandidateCount;
                     drawInputKeyboard();
-                } else if (_inputBufferLen > 0) {
-                    // 发送消息
-                    Conversation* conv = getCurrentConversation();
-                    if (conv) {
-                        sendWsMessage("message", conv->id, _inputBuffer);
-                        addMessage(_userId, _userName, _inputBuffer, true);
-                    }
-                    _inputBufferLen = 0;
-                    _inputBuffer[0] = 0;
-                    _pinyinLen = 0;
-                    _pinyin[0] = 0;
-                    currentCandidateCount = 0;
-                    _candidateIndex = 0;
-                    _inputMode = INPUT_NONE;
-                    drawChatView();
                 }
             }
         } else if (_inputMode == INPUT_LETTER) {
