@@ -117,8 +117,11 @@ private:
     void connectWebSocket();
     void disconnectWebSocket();
     void sendWsMessage(const char* type, const char* to, const char* content);
+    void sendChatMessage(Conversation* conv, const char* content);
     void handleHelloMessage(JsonObject root);
-    void handleChatMessage(JsonObject root);
+    void handleGlobalMessage(JsonObject root);
+    void handleDmMessage(JsonObject root);
+    void handleGroupMessage(JsonObject root);
     
     // 登录
     bool login(const char* username, const char* password);

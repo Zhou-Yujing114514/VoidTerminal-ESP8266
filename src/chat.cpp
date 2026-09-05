@@ -840,6 +840,26 @@ void ChatManager::sendWsMessage(const char* type, const char* to, const char* co
     if (to) doc["to"] = to;
     if (content) doc["content"] = content;
     if (_token[0]) doc["token"] = _token;
+    // auth 消息带 lite 标志，服务器返回精简 hello（跳过历史消息大头）
+    if (strcmp(type, "auth") == 0) doc["lite"] = true;
+    String json;
+    serializeJson(doc, json);
+    _webSocket.sendTXT(json);
+}
+
+void ChatManager::sendChatMessage(Conversation* conv, const char* content) {
+    if (!_wsConnected || !conv || !content) return;
+    StaticJsonDocument<512> doc;
+    if (conv->type == CONV_PUBLIC) {
+        doc["type"] = "global";
+    } else if (conv->type == CONV_GROUP) {
+        doc["type"] = "group";
+        doc["gid"] = conv->id;
+    } else {
+        doc["type"] = "dm";
+        doc["to"] = conv->id;
+    }
+    doc["content"] = content;
     String json;
     serializeJson(doc, json);
     _webSocket.sendTXT(json);
@@ -856,19 +876,17 @@ void ChatManager::handleWsEvent(WStype_t type, uint8_t* payload, size_t length) 
             if (_token[0]) sendWsMessage("auth", nullptr, nullptr);
             break;
         case WStype_TEXT: {
-            StaticJsonDocument<1024> doc;
+            StaticJsonDocument<4096> doc;
             if (deserializeJson(doc, payload, length)) break;
             const char* msgType = doc["type"] | "";
             if (strcmp(msgType, "hello") == 0) {
                 handleHelloMessage(doc.as<JsonObject>());
-            } else if (strcmp(msgType, "message") == 0) {
-                handleChatMessage(doc.as<JsonObject>());
-            } else if (strcmp(msgType, "auth_ok") == 0) {
-                _loggedIn = true;
-                const char* uid = doc["user"]["id"] | "";
-                const char* uname = doc["user"]["name"] | "";
-                strncpy(_userId, uid, 31);
-                strncpy(_userName, uname, 31);
+            } else if (strcmp(msgType, "global") == 0) {
+                handleGlobalMessage(doc.as<JsonObject>());
+            } else if (strcmp(msgType, "dm") == 0) {
+                handleDmMessage(doc.as<JsonObject>());
+            } else if (strcmp(msgType, "group") == 0) {
+                handleGroupMessage(doc.as<JsonObject>());
             }
             break;
         }
@@ -877,17 +895,32 @@ void ChatManager::handleWsEvent(WStype_t type, uint8_t* payload, size_t length) 
 }
 
 void ChatManager::handleHelloMessage(JsonObject root) {
+    // 解析自己的信息（auth 成功后服务器通过 hello.self 下发）
+    JsonObject self = root["self"].as<JsonObject>();
+    if (!self.isNull()) {
+        const char* uid = self["id"] | "";
+        const char* uname = self["username"] | "";
+        if (uid[0]) {
+            strncpy(_userId, uid, 31);
+            _userId[31] = 0;
+            _loggedIn = true;
+        }
+        if (uname[0]) {
+            strncpy(_userName, uname, 31);
+            _userName[31] = 0;
+        }
+    }
     JsonArray friends = root["friends"].as<JsonArray>();
     for (JsonObject friendObj : friends) {
         const char* fid = friendObj["id"] | "";
         const char* fname = friendObj["name"] | "";
-        addConversation(fid, fname, CONV_PRIVATE);
+        if (fid[0]) addConversation(fid, fname, CONV_PRIVATE);
     }
     JsonArray groups = root["groups"].as<JsonArray>();
     for (JsonObject groupObj : groups) {
         const char* gid = groupObj["id"] | "";
         const char* gname = groupObj["name"] | "";
-        addConversation(gid, gname, CONV_GROUP);
+        if (gid[0]) addConversation(gid, gname, CONV_GROUP);
     }
     JsonArray globalMsgs = root["globalMsgs"].as<JsonArray>();
     for (JsonObject msgObj : globalMsgs) {
@@ -902,24 +935,49 @@ void ChatManager::handleHelloMessage(JsonObject root) {
     if (_active && _view == CHAT_VIEW_LIST) drawConversationList();
 }
 
-void ChatManager::handleChatMessage(JsonObject root) {
+void ChatManager::handleGlobalMessage(JsonObject root) {
+    const char* from = root["from"] | "";
+    const char* fromName = root["fromName"] | from;
+    const char* content = root["content"] | "";
+    bool isMe = (strcmp(from, _userId) == 0);
+    Conversation* conv = getCurrentConversation();
+    if (conv && conv->type == CONV_PUBLIC) {
+        if (_view == CHAT_VIEW_CHAT) {
+            addMessage(from, fromName, content, isMe);
+            drawChatView();
+        } else if (_convCount > 0) {
+            _conversations[0].unread++;
+            drawConversationList();
+        }
+    }
+}
+
+void ChatManager::handleDmMessage(JsonObject root) {
     const char* from = root["from"] | "";
     const char* fromName = root["fromName"] | from;
     const char* content = root["content"] | "";
     const char* to = root["to"] | "";
     bool isMe = (strcmp(from, _userId) == 0);
     Conversation* conv = getCurrentConversation();
-    if (conv) {
-        bool belongsToCurrent = false;
-        if (conv->type == CONV_PUBLIC && strcmp(to, "public") == 0) {
-            belongsToCurrent = true;
-        } else if (conv->type == CONV_GROUP && strcmp(to, conv->id) == 0) {
-            belongsToCurrent = true;
-        } else if (conv->type == CONV_PRIVATE && 
-                   (strcmp(from, conv->id) == 0 || strcmp(to, conv->id) == 0)) {
-            belongsToCurrent = true;
+    if (conv && conv->type == CONV_PRIVATE) {
+        // 私聊：对方是 from 或 to 中不等于自己的那一个
+        const char* peer = isMe ? to : from;
+        if (strcmp(conv->id, peer) == 0 && _view == CHAT_VIEW_CHAT) {
+            addMessage(from, fromName, content, isMe);
+            drawChatView();
         }
-        if (belongsToCurrent && _view == CHAT_VIEW_CHAT) {
+    }
+}
+
+void ChatManager::handleGroupMessage(JsonObject root) {
+    const char* from = root["from"] | "";
+    const char* fromName = root["fromName"] | from;
+    const char* content = root["content"] | "";
+    const char* gid = root["gid"] | "";
+    bool isMe = (strcmp(from, _userId) == 0);
+    Conversation* conv = getCurrentConversation();
+    if (conv && conv->type == CONV_GROUP && strcmp(conv->id, gid) == 0) {
+        if (_view == CHAT_VIEW_CHAT) {
             addMessage(from, fromName, content, isMe);
             drawChatView();
         }
@@ -1201,7 +1259,7 @@ void ChatManager::handleKey(KeyEvent evt) {
                     if (_inputBufferLen > 0) {
                         Conversation* conv = getCurrentConversation();
                         if (conv) {
-                            sendWsMessage("message", conv->id, _inputBuffer);
+                            sendChatMessage(conv, _inputBuffer);
                             addMessage(_userId, _userName, _inputBuffer, true);
                         }
                         _inputBufferLen = 0;
