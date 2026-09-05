@@ -30,6 +30,10 @@ public:
     bool isWifiConnected() { return WiFi.status() == WL_CONNECTED; }
     // 非阻塞确保已连接：已连接直接返回true；否则发起连接（后台完成）并返回false
     bool ensureConnected();
+    // 聊天账号密码（存储在EEPROM，配网网页配置）
+    bool saveChatAccount(const char* username, const char* password);
+    void loadChatAccount(char* username, int uMax, char* password, int pMax);
+    bool hasChatAccount();
     
 private:
     bool _active;
@@ -50,6 +54,7 @@ private:
     void handleWifiScan();
     void handleWifiSave();
     void handlePresetSave();
+    void handleChatAccountSave();
     void handleFileList();
     void handleFileUpload();
     void handleFileDelete();

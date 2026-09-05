@@ -1,4 +1,5 @@
 #include "wifi_config.h"
+#include <string.h>
 
 WifiConfigManager wifiConfig;
 
@@ -6,6 +7,9 @@ WifiConfigManager wifiConfig;
 #define EEPROM_MAGIC 0xAA
 #define EEPROM_MAGIC_ADDR 0
 #define EEPROM_PRESET_BASE 1
+// 聊天账号密码存储地址（预设占用 1 + 3*96 = 289 字节，从 289 开始）
+#define EEPROM_CHAT_USER_ADDR 289
+#define EEPROM_CHAT_PASS_ADDR (EEPROM_CHAT_USER_ADDR + CHAT_USERNAME_MAX)
 
 void WifiConfigManager::init() {
     _active = false;
@@ -104,6 +108,48 @@ bool WifiConfigManager::ensureConnected() {
     }
     // 无有效预设
     return false;
+}
+
+bool WifiConfigManager::saveChatAccount(const char* username, const char* password) {
+    if (!username || !password || !username[0] || !password[0]) return false;
+    int uLen = strlen(username);
+    int pLen = strlen(password);
+    if (uLen >= CHAT_USERNAME_MAX) uLen = CHAT_USERNAME_MAX - 1;
+    if (pLen >= CHAT_PASSWORD_MAX) pLen = CHAT_PASSWORD_MAX - 1;
+    for (int i = 0; i < uLen; i++) {
+        EEPROM.write(EEPROM_CHAT_USER_ADDR + i, (uint8_t)username[i]);
+    }
+    EEPROM.write(EEPROM_CHAT_USER_ADDR + uLen, 0);
+    for (int i = 0; i < pLen; i++) {
+        EEPROM.write(EEPROM_CHAT_PASS_ADDR + i, (uint8_t)password[i]);
+    }
+    EEPROM.write(EEPROM_CHAT_PASS_ADDR + pLen, 0);
+    EEPROM.commit();
+    return true;
+}
+
+void WifiConfigManager::loadChatAccount(char* username, int uMax, char* password, int pMax) {
+    username[0] = 0;
+    password[0] = 0;
+    for (int i = 0; i < uMax - 1 && i < CHAT_USERNAME_MAX; i++) {
+        char c = (char)EEPROM.read(EEPROM_CHAT_USER_ADDR + i);
+        if (c == 0 || c == 0xFF) break;
+        username[i] = c;
+        username[i + 1] = 0;
+    }
+    for (int i = 0; i < pMax - 1 && i < CHAT_PASSWORD_MAX; i++) {
+        char c = (char)EEPROM.read(EEPROM_CHAT_PASS_ADDR + i);
+        if (c == 0 || c == 0xFF) break;
+        password[i] = c;
+        password[i + 1] = 0;
+    }
+}
+
+bool WifiConfigManager::hasChatAccount() {
+    char u[CHAT_USERNAME_MAX];
+    char p[CHAT_PASSWORD_MAX];
+    loadChatAccount(u, CHAT_USERNAME_MAX, p, CHAT_PASSWORD_MAX);
+    return u[0] != 0 && p[0] != 0;
 }
 
 void WifiConfigManager::enter() {
@@ -245,6 +291,9 @@ void WifiConfigManager::setupWebServer() {
     // 保存预设
     _server->on("/savepreset", HTTP_POST, [this]() { handlePresetSave(); });
     
+    // 保存聊天账号
+    _server->on("/savechat", HTTP_POST, [this]() { handleChatAccountSave(); });
+    
     // SD卡文件列表
     _server->on("/files", HTTP_GET, [this]() { handleFileList(); });
     
@@ -295,6 +344,18 @@ void WifiConfigManager::handleRoot() {
         html += "<input type='submit' value='保存'>";
         html += "</form>";
     }
+    
+    // 聊天账号密码
+    html += "<h2>虚空终端账号</h2>";
+    char uBuf[CHAT_USERNAME_MAX];
+    char pBuf[CHAT_PASSWORD_MAX];
+    loadChatAccount(uBuf, CHAT_USERNAME_MAX, pBuf, CHAT_PASSWORD_MAX);
+    html += "<form method='post' action='/savechat'>";
+    html += "账号: <input type='text' name='username' value='" + String(uBuf) + "'><br>";
+    html += "密码: <input type='password' name='password' value='" + String(pBuf) + "'><br>";
+    html += "<input type='submit' value='保存账号'>";
+    html += "</form>";
+    html += "<p>" + String(hasChatAccount() ? "已配置账号，聊天自动登录" : "未配置账号") + "</p>";
     
     // SD卡文件管理器
     html += "<h2>SD卡文件管理器</h2>";
@@ -355,6 +416,20 @@ void WifiConfigManager::handlePresetSave() {
         }
     }
     _server->send(400, "text/plain", "参数错误");
+}
+
+void WifiConfigManager::handleChatAccountSave() {
+    if (_server->hasArg("username") && _server->hasArg("password")) {
+        String username = _server->arg("username");
+        String password = _server->arg("password");
+        if (saveChatAccount(username.c_str(), password.c_str())) {
+            _server->send(200, "text/plain", "聊天账号已保存");
+        } else {
+            _server->send(400, "text/plain", "账号或密码为空");
+        }
+    } else {
+        _server->send(400, "text/plain", "参数错误");
+    }
 }
 
 void WifiConfigManager::handleFileList() {

@@ -796,6 +796,15 @@ void ChatManager::drawLetterSelector() {
 
 void ChatManager::connectWebSocket() {
     if (WiFi.status() != WL_CONNECTED) return;
+    // 自动登录：未登录且无 token 时，用配网配置的账号登录
+    if (!_loggedIn && !_token[0]) {
+        char u[CHAT_USERNAME_MAX];
+        char p[CHAT_PASSWORD_MAX];
+        wifiConfig.loadChatAccount(u, CHAT_USERNAME_MAX, p, CHAT_PASSWORD_MAX);
+        if (u[0] && p[0]) {
+            login(u, p);
+        }
+    }
     _webSocket.beginSSL(CHAT_SERVER, CHAT_PORT, "/ws", chatSslFingerprint);
     _webSocket.onEvent(wsEventCallback);
     _webSocket.setReconnectInterval(5000);
