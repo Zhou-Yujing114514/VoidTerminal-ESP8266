@@ -6,25 +6,37 @@ MonitorManager monitor;
 
 void MonitorManager::init() {
     _active = false;
-    _firstLoad = false;
     _selectedServer = 0;
-    _needRedraw = true;
-    _data.valid = false;
     _lastFullRefresh = 0;
-    _lastPartialRefresh = 0;
+    _needFullRefresh = false;
+    for (int i = 0; i < 2; i++) {
+        _data[i].valid = false;
+        _lastPartialRefresh[i] = 0;
+    }
 }
 
 void MonitorManager::enter() {
     _active = true;
-    _needRedraw = true;
-    _data.valid = false;
-    _firstLoad = true;  // 标记首次加载，在update()中异步获取
+    _selectedServer = 0;
+    _needFullRefresh = true;
     wifiConfig.ensureConnected();  // 自动尝试连接 WiFi
     drawLoading();
 }
 
 void MonitorManager::exit() {
     _active = false;
+}
+
+const char* MonitorManager::getServerName(int index) {
+    return (index == 0) ? MONITOR_NAME1 : MONITOR_NAME2;
+}
+
+const char* MonitorManager::getServerHost(int index) {
+    return (index == 0) ? MONITOR_SERVER1 : MONITOR_SERVER2;
+}
+
+int MonitorManager::getServerPort(int index) {
+    return (index == 0) ? MONITOR_PORT1 : MONITOR_PORT2;
 }
 
 void MonitorManager::drawLoading() {
@@ -40,27 +52,28 @@ void MonitorManager::drawError(const char* msg) {
     disp.drawTitleBar("服务器监控");
     disp.drawText(10, 30, "获取数据失败", 2);
     disp.drawText(10, 60, msg, 1);
-    disp.drawStatusBar("短按下:重试", "Home:返回");
+    disp.drawStatusBar("短按上/下:切换  长按下:刷新", "Home:返回");
     disp.refresh(true);
 }
 
-bool MonitorManager::fetchData() {
+bool MonitorManager::fetchData(int serverIndex) {
     if (WiFi.status() != WL_CONNECTED) {
-        strcpy(_data.status, "WiFi未连接");
-        _data.valid = false;
+        strcpy(_data[serverIndex].status, "WiFi未连接");
+        _data[serverIndex].valid = false;
         return false;
     }
     
     WiFiClient client;
+    client.setTimeout(3000);
     HTTPClient http;
-    String url = String("http://") + MONITOR_SERVER + ":" + MONITOR_PORT + "/api/status";
-    http.begin(client, url);
     http.setTimeout(3000);
+    String url = String("http://") + getServerHost(serverIndex) + ":" + getServerPort(serverIndex) + "/api/status";
+    http.begin(client, url);
     
     int httpCode = http.GET();
     if (httpCode != 200) {
-        strcpy(_data.status, "连接失败");
-        _data.valid = false;
+        strcpy(_data[serverIndex].status, "连接失败");
+        _data[serverIndex].valid = false;
         http.end();
         return false;
     }
@@ -68,99 +81,100 @@ bool MonitorManager::fetchData() {
     String payload = http.getString();
     http.end();
     
-    // 解析 JSON
     StaticJsonDocument<1024> doc;
     if (deserializeJson(doc, payload)) {
-        strcpy(_data.status, "解析失败");
-        _data.valid = false;
+        strcpy(_data[serverIndex].status, "解析失败");
+        _data[serverIndex].valid = false;
         return false;
     }
     
-    // 尝试从多种可能的字段名中提取数据
-    _data.cpuUsage = doc["cpu"] | doc["cpu_usage"] | doc["cpuUsage"] | 0.0f;
-    _data.memoryUsage = doc["memory"] | doc["mem"] | doc["memory_usage"] | doc["mem_usage"] | 0.0f;
-    _data.memoryTotal = doc["memory_total"] | doc["mem_total"] | doc["memory"]["total"] | 2.0f;
-    _data.memoryUsed = doc["memory_used"] | doc["mem_used"] | doc["memory"]["used"] | 0.0f;
-    if (_data.memoryUsed == 0 && _data.memoryTotal > 0 && _data.memoryUsage > 0) {
-        _data.memoryUsed = _data.memoryTotal * _data.memoryUsage / 100;
+    MonitorData& d = _data[serverIndex];
+    d.cpuUsage = doc["cpu"] | doc["cpu_usage"] | doc["cpuUsage"] | 0.0f;
+    d.memoryUsage = doc["memory"] | doc["mem"] | doc["memory_usage"] | doc["mem_usage"] | 0.0f;
+    d.memoryTotal = doc["memory_total"] | doc["mem_total"] | doc["memory"]["total"] | 2.0f;
+    d.memoryUsed = doc["memory_used"] | doc["mem_used"] | doc["memory"]["used"] | 0.0f;
+    if (d.memoryUsed == 0 && d.memoryTotal > 0 && d.memoryUsage > 0) {
+        d.memoryUsed = d.memoryTotal * d.memoryUsage / 100;
     }
-    _data.diskUsage = doc["disk"] | doc["disk_usage"] | doc["diskUsage"] | 0.0f;
-    _data.diskTotal = doc["disk_total"] | doc["disk"]["total"] | 30.0f;
-    _data.diskUsed = doc["disk_used"] | doc["disk"]["used"] | 0.0f;
-    if (_data.diskUsed == 0 && _data.diskTotal > 0 && _data.diskUsage > 0) {
-        _data.diskUsed = _data.diskTotal * _data.diskUsage / 100;
+    d.diskUsage = doc["disk"] | doc["disk_usage"] | doc["diskUsage"] | 0.0f;
+    d.diskTotal = doc["disk_total"] | doc["disk"]["total"] | 30.0f;
+    d.diskUsed = doc["disk_used"] | doc["disk"]["used"] | 0.0f;
+    if (d.diskUsed == 0 && d.diskTotal > 0 && d.diskUsage > 0) {
+        d.diskUsed = d.diskTotal * d.diskUsage / 100;
     }
-    _data.networkIn = doc["network_in"] | doc["net_in"] | doc["network"]["in"] | 0.0f;
-    _data.networkOut = doc["network_out"] | doc["net_out"] | doc["network"]["out"] | 0.0f;
-    _data.processCount = doc["processes"] | doc["process_count"] | doc["procs"] | 0;
-    _data.uptimeHours = doc["uptime"] | doc["uptime_hours"] | 0;
+    d.networkIn = doc["network_in"] | doc["net_in"] | doc["network"]["in"] | 0.0f;
+    d.networkOut = doc["network_out"] | doc["net_out"] | doc["network"]["out"] | 0.0f;
+    d.processCount = doc["processes"] | doc["process_count"] | doc["procs"] | 0;
+    d.uptimeHours = doc["uptime"] | doc["uptime_hours"] | 0;
     
-    strcpy(_data.status, "运行中");
-    _data.valid = true;
+    strcpy(d.status, "运行中");
+    d.valid = true;
     return true;
 }
 
-void MonitorManager::drawMonitor() {
+void MonitorManager::drawMonitor(bool fullRefresh) {
     disp.clear();
-    disp.drawTitleBar("服务器监控");
     
-    if (!_data.valid) {
-        drawError("无数据");
+    // 标题栏：左侧服务器名，右侧序号
+    char title[40];
+    snprintf(title, sizeof(title), "服务器监控 - %s", getServerName(_selectedServer));
+    disp.drawTitleBar(title);
+    // 右侧序号（标题栏黑底白字）
+    char idx[16];
+    snprintf(idx, sizeof(idx), "%d/2", _selectedServer + 1);
+    u8g2Fonts.setForegroundColor(GxEPD_WHITE);
+    u8g2Fonts.setBackgroundColor(GxEPD_BLACK);
+    int idxW = disp.getTextWidth(idx);
+    disp.drawText(SCREEN_W - idxW - 4, 3, idx, 1);
+    u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+    u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+    
+    MonitorData& d = _data[_selectedServer];
+    
+    if (!d.valid) {
+        disp.drawText(10, 40, "获取数据失败", 2);
+        disp.drawText(10, 70, d.status, 1);
+        disp.drawStatusBar("短按上/下:切换  长按下:刷新", "Home:返回");
+        disp.refresh(fullRefresh);
         return;
     }
     
-    int y = 22;
-    
-    // 状态
+    int y = 24;
     char line[60];
-    snprintf(line, sizeof(line), "状态: %s", _data.status);
-    disp.drawText(4, y, line, 1);
-    y += 12;
     
     // CPU
-    snprintf(line, sizeof(line), "CPU:  %.1f%%", _data.cpuUsage);
+    snprintf(line, sizeof(line), "CPU:  %.1f%%", d.cpuUsage);
     disp.drawText(4, y, line, 1);
-    disp.drawProgressBar(70, y + 2, 100, (int)_data.cpuUsage);
-    y += 14;
+    disp.drawProgressBar(70, y + 2, 120, (int)d.cpuUsage);
+    y += 16;
     
     // 内存
-    snprintf(line, sizeof(line), "内存: %.1f/%.1f GB (%.1f%%)", 
-             _data.memoryUsed, _data.memoryTotal, _data.memoryUsage);
+    snprintf(line, sizeof(line), "内存: %.2f/%.2f GB (%.1f%%)", 
+             d.memoryUsed, d.memoryTotal, d.memoryUsage);
     disp.drawText(4, y, line, 1);
-    disp.drawProgressBar(70, y + 2, 100, (int)_data.memoryUsage);
-    y += 14;
+    disp.drawProgressBar(70, y + 2, 120, (int)d.memoryUsage);
+    y += 16;
     
     // 磁盘
     snprintf(line, sizeof(line), "磁盘: %.1f/%.1f GB (%.1f%%)", 
-             _data.diskUsed, _data.diskTotal, _data.diskUsage);
+             d.diskUsed, d.diskTotal, d.diskUsage);
     disp.drawText(4, y, line, 1);
-    disp.drawProgressBar(70, y + 2, 100, (int)_data.diskUsage);
-    y += 14;
+    disp.drawProgressBar(70, y + 2, 120, (int)d.diskUsage);
+    y += 16;
     
     // 网络
-    snprintf(line, sizeof(line), "网络: ↓%.1f MB/s  ↑%.1f MB/s", 
-             _data.networkIn, _data.networkOut);
+    snprintf(line, sizeof(line), "网络: ↓%.2f MB/s  ↑%.2f MB/s", 
+             d.networkIn, d.networkOut);
     disp.drawText(4, y, line, 1);
-    y += 12;
+    y += 14;
     
     // 进程和运行时间
     snprintf(line, sizeof(line), "进程: %d  运行: %d小时", 
-             _data.processCount, _data.uptimeHours);
-    disp.drawText(4, y, line, 1);
-    y += 12;
-    
-    // 服务器地址
-    snprintf(line, sizeof(line), "服务器: %s", MONITOR_SERVER);
+             d.processCount, d.uptimeHours);
     disp.drawText(4, y, line, 1);
     
-    disp.drawStatusBar("短按下:刷新  长按下:全局刷新", "Home:返回");
-    disp.refresh(true);
-}
-
-void MonitorManager::drawPartialUpdate() {
-    // 局部刷新：只更新变化的数值区域
-    // 墨水屏局部刷新需要特殊处理，这里简化为全屏刷新
-    drawMonitor();
+    disp.drawStatusBar("短按上/下:切换服务器  长按下:刷新", "Home:返回");
+    disp.refresh(fullRefresh);
 }
 
 void MonitorManager::handleKey(KeyEvent evt) {
@@ -172,19 +186,20 @@ void MonitorManager::handleKey(KeyEvent evt) {
         return;
     }
     
-    if (evt == KEY_DOWN_SHORT) {
-        // 短按下 = 局部刷新（5秒间隔，避免频繁请求）
-        if (millis() - _lastPartialRefresh > 5000) {
-            _lastPartialRefresh = millis();
-            fetchData();
-            drawPartialUpdate();
-        }
+    if (evt == KEY_UP_SHORT) {
+        // 切换到上一个服务器
+        _selectedServer = (_selectedServer - 1 + 2) % 2;
+        _needFullRefresh = true;
+    } else if (evt == KEY_DOWN_SHORT) {
+        // 切换到下一个服务器
+        _selectedServer = (_selectedServer + 1) % 2;
+        _needFullRefresh = true;
     } else if (evt == KEY_DOWN_LONG) {
-        // 长按下 = 全局刷新（10秒间隔）
-        if (millis() - _lastFullRefresh > 10000) {
-            _lastFullRefresh = millis();
-            fetchData();
-            drawMonitor();
+        // 长按手动刷新（3秒间隔限制）
+        if (millis() - _lastPartialRefresh[_selectedServer] > 3000) {
+            _lastPartialRefresh[_selectedServer] = millis();
+            fetchData(_selectedServer);
+            _needFullRefresh = true;
         }
     }
 }
@@ -197,30 +212,27 @@ void MonitorManager::update() {
         wifiConfig.ensureConnected();
     }
     
-    // 首次加载：异步获取数据（避免enter()阻塞）
-    if (_firstLoad) {
-        _firstLoad = false;
-        fetchData();
-        if (_active) {
-            drawMonitor();
-        }
+    unsigned long now = millis();
+    
+    // 当前服务器：1秒自动局部刷新
+    if (now - _lastPartialRefresh[_selectedServer] > MONITOR_PARTIAL_REFRESH_MS) {
+        _lastPartialRefresh[_selectedServer] = now;
+        fetchData(_selectedServer);
+        drawMonitor(false);  // 局部刷新
+        _needFullRefresh = false;
+    }
+    
+    // 10秒全局刷新消除残影
+    if (now - _lastFullRefresh > MONITOR_FULL_REFRESH_MS) {
+        _lastFullRefresh = now;
+        drawMonitor(true);
+        _needFullRefresh = false;
         return;
     }
     
-    // 自动30秒局部刷新（避免频繁HTTP请求阻塞界面）
-    if (millis() - _lastPartialRefresh > 30000) {
-        _lastPartialRefresh = millis();
-        fetchData();
-        if (_active) {
-            drawPartialUpdate();
-        }
-    }
-    
-    // 自动60秒全局刷新
-    if (millis() - _lastFullRefresh > 60000) {
-        _lastFullRefresh = millis();
-        if (_active) {
-            drawMonitor();
-        }
+    // 切换服务器后立即全屏刷新
+    if (_needFullRefresh) {
+        _needFullRefresh = false;
+        drawMonitor(true);
     }
 }
