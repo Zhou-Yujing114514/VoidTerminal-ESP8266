@@ -41,6 +41,7 @@ private:
     unsigned long _lastPartialRefresh[2];
     unsigned long _lastFullRefresh;
     bool _needFullRefresh;
+    char _diag[128];  // 诊断状态（显示在屏幕上）
     
     void drawMonitor(bool fullRefresh);
     bool fetchData(int serverIndex);
