@@ -17,52 +17,96 @@ void InputManager::init() {
     _downPressed = false;
     _upLongFired = false;
     _downLongFired = false;
+    _upPending = false;
+    _downPending = false;
     _pendingEvent = KEY_NONE;
-    _upLastReleaseTime = 0;
-    _downLastReleaseTime = 0;
-    _menuLastReleaseTime = 0;
-    _lastConflictReadTime = 0;
+    _upReleaseTime = 0;
+    _downReleaseTime = 0;
     _upFirstLowTime = 0;
     _downFirstLowTime = 0;
     
     Serial.println("InputManager: 按键初始化完成");
     Serial.printf("  KEY_MENU=GPIO%d, KEY_UP=GPIO%d, KEY_DOWN=GPIO%d\n", KEY_MENU, KEY_UP, KEY_DOWN);
-    Serial.println("  仅 GPIO0(EPD_DC) 采用冲突引脚降频读取");
+    Serial.println("  双击/短按采用延迟确认，长按立即触发");
 }
 
 int InputManager::readPinSafe(int pin) {
     // 只有 EPD_DC(GPIO0) 与屏幕刷新冲突，需要临时切换模式
-    // GPIO3(RX)/GPIO12 作为普通按键输入，无需特殊处理
     bool isConflict = (pin == EPD_DC);
     
     if (isConflict) {
-        // 临时切换为输入上拉模式
         pinMode(pin, INPUT_PULLUP);
-        delayMicroseconds(300); // 等待电平稳定
+        delayMicroseconds(200);
     }
     
-    // 多次采样防抖（8次采样，超过4次为高则高）
     int sum = 0;
     for (int i = 0; i < 8; i++) {
         sum += digitalRead(pin);
-        delayMicroseconds(150);
+        delayMicroseconds(100);
     }
     int result = (sum > 4) ? HIGH : LOW;
     
     if (isConflict) {
-        // 恢复为输出高电平（DC 空闲时是高电平）
         pinMode(pin, OUTPUT);
         digitalWrite(pin, HIGH);
-        delayMicroseconds(150);
+        delayMicroseconds(100);
     }
     
     return result;
 }
 
+// 处理一个按键的按下/释放状态机，返回产生的按键码（无事件返回 KEY_NONE）
+// 采用延迟短按：释放后等待双击窗口，若窗口内再次按下则双击，否则短按
+static KeyEvent processKey(
+    int pinState,
+    bool& pressed, bool& longFired, bool& pending,
+    unsigned long& pressTime, unsigned long& releaseTime, unsigned long& firstLowTime,
+    unsigned long now,
+    KeyEvent shortEvt, KeyEvent doubleEvt, KeyEvent longEvt)
+{
+    if (pinState == LOW && !pressed) {
+        // 检测到按下
+        if (pending) {
+            // 双击窗口内再次按下 → 双击
+            pending = false;
+            pressed = true;
+            pressTime = now;
+            longFired = false;
+            return doubleEvt;
+        }
+        // 第一次按下，用二次确认避免抖动
+        if (firstLowTime == 0) {
+            firstLowTime = now;
+        } else if (now - firstLowTime >= 10) {
+            pressed = true;
+            pressTime = now;
+            longFired = false;
+            firstLowTime = 0;
+        }
+    } else if (pinState == HIGH) {
+        firstLowTime = 0;
+        if (pressed) {
+            pressed = false;
+            unsigned long duration = now - pressTime;
+            if (duration > KEY_DEBOUNCE_MS && !longFired) {
+                // 释放：不立即发短按，进入待确认（等双击窗口）
+                pending = true;
+                releaseTime = now;
+            }
+        }
+    } else if (pinState == LOW && pressed && !longFired) {
+        if (now - pressTime > KEY_LONGPRESS_MS) {
+            longFired = true;
+            return longEvt;
+        }
+    }
+    return KEY_NONE;
+}
+
 void InputManager::update() {
     unsigned long now = millis();
     
-    // ===== 按键1（Menu/Home）- 无冲突，正常读取，只处理短按 =====
+    // ===== 按键1（Menu/Home）- 短按立即触发（回主页，无需双击延迟）=====
     int menuState = readPinSafe(KEY_MENU);
     if (menuState == LOW && !_menuPressed) {
         _menuPressed = true;
@@ -71,93 +115,34 @@ void InputManager::update() {
         _menuPressed = false;
         unsigned long duration = now - _menuPressTime;
         if (duration > KEY_DEBOUNCE_MS && duration < KEY_LONGPRESS_MS) {
-            if (now - _menuLastReleaseTime < KEY_DOUBLECLICK_MS) {
-                _pendingEvent = KEY_MENU_DOUBLE;
-            } else {
-                _pendingEvent = KEY_MENU_SHORT;
-            }
-            _menuLastReleaseTime = now;
+            _pendingEvent = KEY_MENU_SHORT;
         }
     }
     
-    // ===== 按键3（Down）- 无冲突，全速读取，二次确认机制 =====
+    // ===== 按键3（Down）- 延迟短按 =====
     int downState = readPinSafe(KEY_DOWN);
+    KeyEvent downEvt = processKey(downState, _downPressed, _downLongFired, _downPending,
+                                  _downPressTime, _downReleaseTime, _downFirstLowTime, now,
+                                  KEY_DOWN_SHORT, KEY_DOWN_DOUBLE, KEY_DOWN_LONG);
+    if (downEvt != KEY_NONE) _pendingEvent = downEvt;
     
-    if (downState == LOW && !_downPressed) {
-        // 第一次读到 LOW，记录时间，不立即认为按下
-        if (_downFirstLowTime == 0) {
-            _downFirstLowTime = now;
-        } else if (now - _downFirstLowTime >= 10) {
-            // 连续两次（间隔>=10ms）都读到 LOW，确认按下
-            _downPressed = true;
-            _downPressTime = now;
-            _downLongFired = false;
-            _downFirstLowTime = 0;
-        }
-    } else if (downState == HIGH) {
-        // 读到 HIGH，重置首次 LOW 时间
-        _downFirstLowTime = 0;
-        
-        if (_downPressed) {
-            _downPressed = false;
-            unsigned long duration = now - _downPressTime;
-            if (duration > KEY_DEBOUNCE_MS && !_downLongFired) {
-                if (now - _downLastReleaseTime < KEY_DOUBLECLICK_MS) {
-                    _pendingEvent = KEY_DOWN_DOUBLE;
-                } else {
-                    _pendingEvent = KEY_DOWN_SHORT;
-                }
-                _downLastReleaseTime = now;
-            }
-        }
-    } else if (downState == LOW && _downPressed && !_downLongFired) {
-        if (now - _downPressTime > KEY_LONGPRESS_MS) {
-            _downLongFired = true;
-            _pendingEvent = KEY_DOWN_LONG;
-        }
+    // 按键3待确认短按超时 → 确认为短按
+    if (_downPending && now - _downReleaseTime > KEY_DOUBLECLICK_MS) {
+        _downPending = false;
+        _pendingEvent = KEY_DOWN_SHORT;
     }
     
-    // ===== 冲突引脚（仅 GPIO0/EPD_DC）降频：每 50ms 才读取一次 =====
-    if (now - _lastConflictReadTime < 50) {
-        return; // 还没到读取时间，跳过
-    }
-    _lastConflictReadTime = now;
-    
-    // ===== 按键2（Up）- 二次确认机制 =====
+    // ===== 按键2（Up）- 延迟短按 =====
     int upState = readPinSafe(KEY_UP);
+    KeyEvent upEvt = processKey(upState, _upPressed, _upLongFired, _upPending,
+                                _upPressTime, _upReleaseTime, _upFirstLowTime, now,
+                                KEY_UP_SHORT, KEY_UP_DOUBLE, KEY_UP_LONG);
+    if (upEvt != KEY_NONE) _pendingEvent = upEvt;
     
-    if (upState == LOW && !_upPressed) {
-        // 第一次读到 LOW，记录时间，不立即认为按下
-        if (_upFirstLowTime == 0) {
-            _upFirstLowTime = now;
-        } else if (now - _upFirstLowTime >= 10) {
-            // 连续两次（间隔>=10ms）都读到 LOW，确认按下
-            _upPressed = true;
-            _upPressTime = now;
-            _upLongFired = false;
-            _upFirstLowTime = 0;
-        }
-    } else if (upState == HIGH) {
-        // 读到 HIGH，重置首次 LOW 时间
-        _upFirstLowTime = 0;
-        
-        if (_upPressed) {
-            _upPressed = false;
-            unsigned long duration = now - _upPressTime;
-            if (duration > KEY_DEBOUNCE_MS && !_upLongFired) {
-                if (now - _upLastReleaseTime < KEY_DOUBLECLICK_MS) {
-                    _pendingEvent = KEY_UP_DOUBLE;
-                } else {
-                    _pendingEvent = KEY_UP_SHORT;
-                }
-                _upLastReleaseTime = now;
-            }
-        }
-    } else if (upState == LOW && _upPressed && !_upLongFired) {
-        if (now - _upPressTime > KEY_LONGPRESS_MS) {
-            _upLongFired = true;
-            _pendingEvent = KEY_UP_LONG;
-        }
+    // 按键2待确认短按超时 → 确认为短按
+    if (_upPending && now - _upReleaseTime > KEY_DOUBLECLICK_MS) {
+        _upPending = false;
+        _pendingEvent = KEY_UP_SHORT;
     }
 }
 
