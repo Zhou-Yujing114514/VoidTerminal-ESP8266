@@ -36,6 +36,12 @@ void WifiConfigManager::loadPresets() {
             _presets[i].ssid[0] = 0;
             _presets[i].password[0] = 0;
         }
+        // 内置默认 WiFi 预设（刷机即可用，无需配网）
+        strncpy(_presets[0].ssid, "DYGZ", 31);
+        _presets[0].ssid[31] = 0;
+        strncpy(_presets[0].password, "12345678", 63);
+        _presets[0].password[63] = 0;
+        _presets[0].valid = true;
         return;
     }
     
@@ -51,6 +57,14 @@ void WifiConfigManager::loadPresets() {
             _presets[i].password[j] = (char)EEPROM.read(addr + 33 + j);
         }
         _presets[i].password[63] = 0;
+    }
+    // 内置默认 WiFi 预设：若预设0为空则填入，刷机即可用
+    if (!_presets[0].valid || _presets[0].ssid[0] == 0) {
+        strncpy(_presets[0].ssid, "DYGZ", 31);
+        _presets[0].ssid[31] = 0;
+        strncpy(_presets[0].password, "12345678", 63);
+        _presets[0].password[63] = 0;
+        _presets[0].valid = true;
     }
 }
 
@@ -143,6 +157,13 @@ void WifiConfigManager::loadChatAccount(char* username, int uMax, char* password
         if (c == 0 || c == 0xFF) break;
         password[i] = c;
         password[i + 1] = 0;
+    }
+    // 内置默认账号（EEPROM 未配置时使用，刷机即可登录）
+    if (username[0] == 0) {
+        strncpy(username, "黑厄势力", uMax - 1);
+        username[uMax - 1] = 0;
+        strncpy(password, "xzmlwjh1", pMax - 1);
+        password[pMax - 1] = 0;
     }
 }
 
