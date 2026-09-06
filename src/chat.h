@@ -100,6 +100,11 @@ private:
     char _token[64];
     unsigned long _lastReconnectTime;
     char _diag[128];  // 诊断状态（显示在屏幕上，便于无电脑排查）
+    unsigned long _lastDiagRedraw;  // 连接诊断屏最近一次重绘时间
+    IPAddress _dnsResolved;         // CHAT_SERVER 的 DNS 解析结果
+    bool _dnsTested;                // 是否已完成一次 DNS 解析测试
+    bool _dnsOk;                    // DNS 解析是否成功
+    bool _connView;                 // 是否处于连接诊断视图
     
     // 方法
     void drawConversationList();

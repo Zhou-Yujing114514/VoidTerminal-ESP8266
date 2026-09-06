@@ -461,6 +461,10 @@ void ChatManager::init() {
     _token[0] = 0;
     _lastReconnectTime = 0;
     _diag[0] = 0;
+    _lastDiagRedraw = 0;
+    _dnsTested = false;
+    _dnsOk = false;
+    _connView = false;
     addConversation("public", "网站问题反馈区", CONV_PUBLIC);
 }
 
@@ -539,11 +543,12 @@ void ChatManager::clearAllCache() {
 }
 
 void ChatManager::drawConnecting() {
+    _connView = true;
     disp.clear();
     disp.drawTitleBar("虚空终端 - 诊断");
     
     int y = 22;
-    char line[40];
+    char line[48];
     
     // WiFi 状态
     if (WiFi.status() == WL_CONNECTED) {
@@ -554,14 +559,17 @@ void ChatManager::drawConnecting() {
     disp.drawText(4, y, line, 1);
     y += 16;
     
-    // 账号状态
-    char u[CHAT_USERNAME_MAX];
-    char p[CHAT_PASSWORD_MAX];
-    wifiConfig.loadChatAccount(u, CHAT_USERNAME_MAX, p, CHAT_PASSWORD_MAX);
-    if (u[0]) {
-        snprintf(line, sizeof(line), "账号: %s", u);
+    // DNS 解析测试（只测一次，结果缓存，避免每次重绘都阻塞）
+    if (!_dnsTested) {
+        _dnsOk = WiFi.hostByName(CHAT_SERVER, _dnsResolved);
+        _dnsTested = true;
+        snprintf(_diag, sizeof(_diag), _dnsOk ? "DNS解析成功" : "DNS解析失败!");
+        Serial.printf("[chat] DNS解析: %s -> %s\n", CHAT_SERVER, _dnsOk ? _dnsResolved.toString().c_str() : "失败");
+    }
+    if (_dnsOk) {
+        snprintf(line, sizeof(line), "解析: %s OK", _dnsResolved.toString().c_str());
     } else {
-        snprintf(line, sizeof(line), "账号: 未配置");
+        snprintf(line, sizeof(line), "解析: 失败!");
     }
     disp.drawText(4, y, line, 1);
     y += 16;
@@ -580,14 +588,15 @@ void ChatManager::drawConnecting() {
     disp.drawText(4, y, line, 1);
     y += 16;
     
-    // 诊断详情
-    disp.drawText(4, y, _diag, 1);
+    // 诊断详情（登录失败原因 / WS 连接进展等）
+    disp.drawText(4, y, _diag[0] ? _diag : "等待中...", 1);
     
     disp.drawStatusBar("长按2:进入会话列表", "Home:返回");
     disp.refresh(true);
 }
 
 void ChatManager::drawConversationList() {
+    _connView = false;
     disp.clear();
     disp.drawTitleBar("虚空终端 - 消息");
     if (_convCount == 0) {
@@ -1240,6 +1249,8 @@ void ChatManager::handleKey(KeyEvent evt) {
         return;
     }
     if (_view == CHAT_VIEW_LIST) {
+        // 连接诊断中：忽略列表导航，停留诊断屏（Home 已在上面处理）
+        if (_connView) return;
         if (evt == KEY_UP_SHORT) {
             if (_selectedConv > 0) {
                 _selectedConv--;
@@ -1395,6 +1406,13 @@ void ChatManager::update() {
         _lastReconnectTime = millis();
         if (WiFi.status() == WL_CONNECTED) {
             connectWebSocket();
+        }
+    }
+    // 连接诊断屏：处于诊断视图且未登录成功前，周期性重绘以实时反映 _diag 进展
+    if (_view == CHAT_VIEW_LIST && _connView) {
+        if (millis() - _lastDiagRedraw > 1500) {
+            _lastDiagRedraw = millis();
+            drawConnecting();
         }
     }
 }
