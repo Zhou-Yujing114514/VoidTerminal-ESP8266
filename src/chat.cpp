@@ -880,20 +880,24 @@ void ChatManager::connectWebSocket() {
         return;
     }
     // 自动登录：未登录且无 token 时，用配网配置的账号登录
+    bool loginOk = false;
     if (!_loggedIn && !_token[0]) {
         char u[CHAT_USERNAME_MAX];
         char p[CHAT_PASSWORD_MAX];
         wifiConfig.loadChatAccount(u, CHAT_USERNAME_MAX, p, CHAT_PASSWORD_MAX);
         if (u[0] && p[0]) {
             Serial.printf("[chat] 读取到账号[%s], 开始登录\n", u);
-            login(u, p);
+            loginOk = login(u, p);
         } else {
             snprintf(_diag, sizeof(_diag), "无账号, 跳过登录");
             Serial.println("[chat] 警告: EEPROM无账号密码, 跳过登录");
         }
     }
     Serial.printf("[chat] 连接WebSocket: wss://%s:%d/ws\n", CHAT_SERVER, CHAT_PORT);
-    snprintf(_diag, sizeof(_diag), "连接WS中...");
+    // 仅登录成功后才覆盖 _diag，失败时保留 login 的失败原因供诊断
+    if (loginOk || _loggedIn) {
+        snprintf(_diag, sizeof(_diag), "连接WS中...");
+    }
     _webSocket.beginSSL(CHAT_SERVER, CHAT_PORT, "/ws", chatSslFingerprint);
     _webSocket.onEvent(wsEventCallback);
     _webSocket.setReconnectInterval(5000);
@@ -1126,7 +1130,11 @@ bool ChatManager::login(const char* username, const char* password) {
             Serial.println("[chat] 登录失败: JSON解析失败");
         }
     } else {
-        snprintf(_diag, sizeof(_diag), "登录HTTP=%d(%lus)", httpCode, elapsed);
+        if (httpCode < 0) {
+            snprintf(_diag, sizeof(_diag), "TLS失败 HTTP=%d(%lus)", httpCode, elapsed);
+        } else {
+            snprintf(_diag, sizeof(_diag), "登录HTTP=%d(%lus)", httpCode, elapsed);
+        }
     }
     http.end();
     return false;
