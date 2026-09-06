@@ -29,7 +29,7 @@ WebSocketsClient::WebSocketsClient() {
     _cbEvent             = NULL;
     _client.num          = 0;
     _client.cIsClient    = true;
-    _client.extraHeaders = WEBSOCKETS_STRING("Origin: file://");
+    _client.extraHeaders = WEBSOCKETS_STRING("Origin: https://buer.kdns.fr");
     _reconnectInterval   = 500;
     _port                = 0;
     _host                = "";
