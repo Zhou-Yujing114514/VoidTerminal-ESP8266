@@ -1083,7 +1083,7 @@ bool ChatManager::login(const char* username, const char* password) {
     client.setFingerprint(chatSslFingerprint);
     // ECDSA 证书握手在 ESP8266 上纯软件运算较慢，需足够超时
     client.setTimeout(20000);
-    client.setBufferSizes(4096, 512);  // 减小 TLS 缓冲，缓解堆内存紧张（证书链约2KB）
+    client.setBufferSizes(8192, 512);  // hello加密后record约4.7KB，4KB不够接收
     HTTPClient http;
     http.setTimeout(20000);
     String url = String("https://") + CHAT_SERVER + "/api/login";
