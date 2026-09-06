@@ -13,6 +13,7 @@ void MonitorManager::init() {
     for (int i = 0; i < 2; i++) {
         _data[i].valid = false;
         _lastPartialRefresh[i] = 0;
+        _dnsOk[i] = true;   // 初始乐观：默认 DNS 正常，失败时才实测
     }
 }
 
@@ -43,15 +44,24 @@ int MonitorManager::getServerPort(int index) {
 void MonitorManager::drawLoading() {
     disp.clear();
     disp.drawTitleBar("服务器监控 - 诊断");
-    int y = 24;
+    int y = 22;
+    char line[64];
     if (WiFi.status() == WL_CONNECTED) {
         disp.drawText(4, y, "WiFi: 已连接", 1);
     } else {
         disp.drawText(4, y, "WiFi: 未连接", 1);
     }
     y += 16;
-    char line[64];
-    snprintf(line, sizeof(line), "服务器: %s", getServerName(_selectedServer));
+    IPAddress dns = WiFi.dnsIP(0);
+    snprintf(line, sizeof(line), "DNS: %s", dns.toString().c_str());
+    disp.drawText(4, y, line, 1);
+    y += 16;
+    IPAddress resolved;
+    if (WiFi.hostByName(getServerHost(_selectedServer), resolved)) {
+        snprintf(line, sizeof(line), "解析: %s OK", resolved.toString().c_str());
+    } else {
+        snprintf(line, sizeof(line), "解析: 失败!");
+    }
     disp.drawText(4, y, line, 1);
     y += 16;
     disp.drawText(4, y, _diag, 1);
@@ -88,10 +98,24 @@ bool MonitorManager::fetchData(int serverIndex) {
     
     int httpCode = http.GET();
     Serial.printf("[mon] HTTP状态码: %d\n", httpCode);
-    if (httpCode != 200) {
+    if (httpCode == 200) {
+        _dnsOk[serverIndex] = true;  // 请求成功说明 DNS/TCP 均正常
+    } else {
         strcpy(_data[serverIndex].status, "连接失败");
         _data[serverIndex].valid = false;
-        snprintf(_diag, sizeof(_diag), "HTTP=%d 失败", httpCode);
+        // 失败后测 DNS（只测一次并缓存，避免每次失败都阻塞数秒）
+        if (_dnsOk[serverIndex]) {
+            _dnsOk[serverIndex] = WiFi.hostByName(getServerHost(serverIndex), _dnsResolved[serverIndex]);
+            Serial.printf("[mon] DNS解析: %s -> %s\n", getServerHost(serverIndex),
+                          _dnsOk[serverIndex] ? _dnsResolved[serverIndex].toString().c_str() : "失败");
+        }
+        if (!_dnsOk[serverIndex]) {
+            snprintf(_diag, sizeof(_diag), "DNS解析失败");
+        } else if (httpCode < 0) {
+            snprintf(_diag, sizeof(_diag), "DNS OK, 连不上(HTTP=%d)", httpCode);
+        } else {
+            snprintf(_diag, sizeof(_diag), "DNS OK, HTTP=%d", httpCode);
+        }
         http.end();
         return false;
     }
@@ -154,8 +178,9 @@ void MonitorManager::drawMonitor(bool fullRefresh) {
     MonitorData& d = _data[_selectedServer];
     
     if (!d.valid) {
-        disp.drawText(10, 40, "获取数据失败", 2);
-        disp.drawText(10, 70, d.status, 1);
+        disp.drawText(10, 26, "获取数据失败", 2);
+        disp.drawText(10, 48, d.status, 1);
+        disp.drawText(10, 64, _diag, 1);
         disp.drawStatusBar("短按上/下:切换  长按下:刷新", "Home:返回");
         disp.refresh(fullRefresh);
         return;

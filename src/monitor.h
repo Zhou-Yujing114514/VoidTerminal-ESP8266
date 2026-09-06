@@ -42,6 +42,8 @@ private:
     unsigned long _lastFullRefresh;
     bool _needFullRefresh;
     char _diag[128];  // 诊断状态（显示在屏幕上）
+    IPAddress _dnsResolved[2];  // 两个服务器的 DNS 解析结果缓存
+    bool _dnsOk[2];             // DNS 解析是否成功（请求成功时自动置 true）
     
     void drawMonitor(bool fullRefresh);
     bool fetchData(int serverIndex);
