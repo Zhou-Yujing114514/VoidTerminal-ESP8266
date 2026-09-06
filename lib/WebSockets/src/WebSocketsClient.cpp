@@ -440,6 +440,13 @@ bool WebSocketsClient::sendPing(String & payload) {
     return sendPing((uint8_t *)payload.c_str(), payload.length());
 }
 
+bool WebSocketsClient::sendPong(uint8_t * payload, size_t length) {
+    if(clientIsConnected(&_client)) {
+        return sendFrame(&_client, WSop_pong, payload, length);
+    }
+    return false;
+}
+
 /**
  * disconnect one client
  * @param num uint8_t client id

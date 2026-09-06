@@ -99,6 +99,7 @@ class WebSocketsClient : protected WebSockets {
 
     bool sendPing(uint8_t * payload = NULL, size_t length = 0);
     bool sendPing(String & payload);
+    bool sendPong(uint8_t * payload = NULL, size_t length = 0);
 
     void disconnect(void);
 

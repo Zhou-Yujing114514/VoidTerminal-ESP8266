@@ -944,6 +944,11 @@ void ChatManager::sendChatMessage(Conversation* conv, const char* content) {
 
 void ChatManager::handleWsEvent(WStype_t type, uint8_t* payload, size_t length) {
     switch (type) {
+        case WStype_PING:
+            // 服务器心跳 ping，必须回 pong，否则服务器会断开连接
+            _webSocket.sendPong(payload, length);
+            Serial.println("[chat] 收到ping, 回pong");
+            break;
         case WStype_DISCONNECTED:
             _wsConnected = false;
             _loggedIn = false;
