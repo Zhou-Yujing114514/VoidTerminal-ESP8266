@@ -944,8 +944,19 @@ void ChatManager::handleWsEvent(WStype_t type, uint8_t* payload, size_t length) 
             break;
         case WStype_TEXT: {
             Serial.printf("[chat] 收到WS消息 %d字节\n", (int)length);
-            DynamicJsonDocument doc(8192);
-            if (deserializeJson(doc, payload, length)) {
+            // filter 只解析需要的字段，跳过 globalMsgs 历史消息大头，节省内存
+            StaticJsonDocument<256> filter;
+            filter["type"] = true;
+            filter["self"] = true;
+            filter["friends"] = true;
+            filter["groups"] = true;
+            filter["from"] = true;
+            filter["fromName"] = true;
+            filter["content"] = true;
+            filter["to"] = true;
+            filter["gid"] = true;
+            DynamicJsonDocument doc(4096);
+            if (deserializeJson(doc, payload, length, DeserializationOption::Filter(filter))) {
                 snprintf(_diag, sizeof(_diag), "JSON解析失败");
                 Serial.println("[chat] JSON解析失败!");
                 break;
