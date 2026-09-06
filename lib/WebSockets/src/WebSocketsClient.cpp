@@ -262,7 +262,7 @@ void WebSocketsClient::loop(void) {
             _client.ssl = new WEBSOCKETS_NETWORK_SSL_CLASS();
 #if defined(ESP8266) && defined(SSL_BARESSL)
             // 减小 TLS 缓冲，缓解 ESP8266 堆内存紧张（默认 16KB 在 ECDSA 握手时易 OOM）
-            _client.ssl->setBufferSizes(8192, 512);
+            _client.ssl->setBufferSizes(4096, 512);
 #endif
             _client.tcp = _client.ssl;
             if(_CA_cert) {
