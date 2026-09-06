@@ -547,8 +547,16 @@ void ChatManager::drawConnecting() {
     disp.clear();
     disp.drawTitleBar("虚空终端 - 诊断");
     
-    int y = 22;
+    int y = 20;
     char line[48];
+    
+    // 上次重启原因（非正常开机时，优先完整显示崩溃信息）
+    if (g_resetInfo[0] && strncmp(g_resetInfo, "Power On", 8) != 0) {
+        snprintf(line, sizeof(line), "重启:%s", g_resetInfo);
+        y = disp.drawWrappedText(4, y, line, SCREEN_W - 8, 13) + 3;
+    } else {
+        y = 22;
+    }
     
     // WiFi 状态
     if (WiFi.status() == WL_CONNECTED) {
@@ -557,7 +565,7 @@ void ChatManager::drawConnecting() {
         snprintf(line, sizeof(line), "WiFi: 未连接");
     }
     disp.drawText(4, y, line, 1);
-    y += 16;
+    y += 14;
     
     // DNS 解析测试（只测一次，结果缓存，避免每次重绘都阻塞）
     if (!_dnsTested) {
@@ -572,7 +580,7 @@ void ChatManager::drawConnecting() {
         snprintf(line, sizeof(line), "解析: 失败!");
     }
     disp.drawText(4, y, line, 1);
-    y += 16;
+    y += 14;
     
     // 登录状态
     if (_loggedIn && _token[0]) {
@@ -581,22 +589,20 @@ void ChatManager::drawConnecting() {
         snprintf(line, sizeof(line), "登录: 未完成");
     }
     disp.drawText(4, y, line, 1);
-    y += 16;
+    y += 14;
     
     // WebSocket 状态
     snprintf(line, sizeof(line), "WS: %s", _wsConnected ? "已连接" : "未连接");
     disp.drawText(4, y, line, 1);
-    y += 16;
+    y += 14;
     
     // 诊断详情（登录失败原因 / WS 连接进展等）
     disp.drawText(4, y, _diag[0] ? _diag : "等待中...", 1);
-    y += 16;
+    y += 14;
     
-    // 上次重启原因（非正常开机时显示，定位崩溃）
-    if (g_resetInfo[0] && strncmp(g_resetInfo, "Power On", 8) != 0) {
-        snprintf(line, sizeof(line), "重启:%s", g_resetInfo);
-        disp.drawText(4, y, line, 1);
-    }
+    // 剩余堆内存
+    snprintf(line, sizeof(line), "堆:%d B", ESP.getFreeHeap());
+    disp.drawText(4, y, line, 1);
     
     disp.drawStatusBar("长按2:进入会话列表", "Home:返回");
     disp.refresh(true);
@@ -1083,7 +1089,7 @@ bool ChatManager::login(const char* username, const char* password) {
     client.setFingerprint(chatSslFingerprint);
     // ECDSA 证书握手在 ESP8266 上纯软件运算较慢，需足够超时
     client.setTimeout(20000);
-    client.setBufferSizes(8192, 512);  // 减小 TLS 缓冲，缓解堆内存紧张
+    client.setBufferSizes(4096, 512);  // 减小 TLS 缓冲，缓解堆内存紧张（证书链约2KB）
     HTTPClient http;
     http.setTimeout(20000);
     String url = String("https://") + CHAT_SERVER + "/api/login";

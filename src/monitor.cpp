@@ -44,18 +44,24 @@ int MonitorManager::getServerPort(int index) {
 void MonitorManager::drawLoading() {
     disp.clear();
     disp.drawTitleBar("服务器监控 - 诊断");
-    int y = 22;
+    int y = 20;
     char line[64];
+    if (g_resetInfo[0] && strncmp(g_resetInfo, "Power On", 8) != 0) {
+        snprintf(line, sizeof(line), "重启:%s", g_resetInfo);
+        y = disp.drawWrappedText(4, y, line, SCREEN_W - 8, 13) + 3;
+    } else {
+        y = 22;
+    }
     if (WiFi.status() == WL_CONNECTED) {
         disp.drawText(4, y, "WiFi: 已连接", 1);
     } else {
         disp.drawText(4, y, "WiFi: 未连接", 1);
     }
-    y += 16;
+    y += 14;
     IPAddress dns = WiFi.dnsIP(0);
     snprintf(line, sizeof(line), "DNS: %s", dns.toString().c_str());
     disp.drawText(4, y, line, 1);
-    y += 16;
+    y += 14;
     IPAddress resolved;
     if (WiFi.hostByName(getServerHost(_selectedServer), resolved)) {
         snprintf(line, sizeof(line), "解析: %s OK", resolved.toString().c_str());
@@ -63,13 +69,11 @@ void MonitorManager::drawLoading() {
         snprintf(line, sizeof(line), "解析: 失败!");
     }
     disp.drawText(4, y, line, 1);
-    y += 16;
+    y += 14;
     disp.drawText(4, y, _diag, 1);
-    y += 16;
-    if (g_resetInfo[0] && strncmp(g_resetInfo, "Power On", 8) != 0) {
-        snprintf(line, sizeof(line), "重启:%s", g_resetInfo);
-        disp.drawText(4, y, line, 1);
-    }
+    y += 14;
+    snprintf(line, sizeof(line), "堆:%d B", ESP.getFreeHeap());
+    disp.drawText(4, y, line, 1);
     disp.drawStatusBar("长按3:刷新  1:返回", "Home:返回");
     disp.refresh(true);
 }
