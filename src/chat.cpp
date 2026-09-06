@@ -1071,11 +1071,14 @@ bool ChatManager::login(const char* username, const char* password) {
     }
     Serial.printf("[chat] 开始登录, 账号=%s\n", username);
     snprintf(_diag, sizeof(_diag), "正在登录...");
+    unsigned long t0 = millis();
     WiFiClientSecure client;
     client.setFingerprint(chatSslFingerprint);
-    client.setTimeout(5000);
+    // ECDSA 证书握手在 ESP8266 上纯软件运算较慢，需足够超时
+    client.setTimeout(20000);
+    client.setBufferSizes(8192, 512);  // 减小 TLS 缓冲，缓解堆内存紧张
     HTTPClient http;
-    http.setTimeout(5000);
+    http.setTimeout(20000);
     String url = String("https://") + CHAT_SERVER + "/api/login";
     http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
@@ -1085,7 +1088,8 @@ bool ChatManager::login(const char* username, const char* password) {
     String body;
     serializeJson(doc, body);
     int httpCode = http.POST(body);
-    Serial.printf("[chat] 登录HTTP状态码: %d\n", httpCode);
+    unsigned long elapsed = (millis() - t0) / 1000;
+    Serial.printf("[chat] 登录HTTP状态码: %d (耗时%lus)\n", httpCode, elapsed);
     if (httpCode == 200) {
         String payload = http.getString();
         StaticJsonDocument<512> resp;
@@ -1107,7 +1111,7 @@ bool ChatManager::login(const char* username, const char* password) {
             Serial.println("[chat] 登录失败: JSON解析失败");
         }
     } else {
-        snprintf(_diag, sizeof(_diag), "登录HTTP=%d", httpCode);
+        snprintf(_diag, sizeof(_diag), "登录HTTP=%d(%lus)", httpCode, elapsed);
     }
     http.end();
     return false;
