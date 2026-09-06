@@ -100,6 +100,7 @@ private:
     char _token[64];
     unsigned long _lastReconnectTime;
     char _diag[128];  // 诊断状态（显示在屏幕上，便于无电脑排查）
+    char _loginDiag[48];  // 登录结果独立显示（不被 WS 事件覆盖）
     unsigned long _lastDiagRedraw;  // 连接诊断屏最近一次重绘时间
     IPAddress _dnsResolved;         // CHAT_SERVER 的 DNS 解析结果
     bool _dnsTested;                // 是否已完成一次 DNS 解析测试

@@ -461,6 +461,7 @@ void ChatManager::init() {
     _token[0] = 0;
     _lastReconnectTime = 0;
     _diag[0] = 0;
+    _loginDiag[0] = 0;
     _lastDiagRedraw = 0;
     _dnsTested = false;
     _dnsOk = false;
@@ -558,51 +559,22 @@ void ChatManager::drawConnecting() {
         y = 22;
     }
     
-    // WiFi 状态
-    if (WiFi.status() == WL_CONNECTED) {
-        snprintf(line, sizeof(line), "WiFi: 已连接");
-    } else {
-        snprintf(line, sizeof(line), "WiFi: 未连接");
-    }
-    disp.drawText(4, y, line, 1);
-    y += 14;
-    
-    // DNS 解析测试（只测一次，结果缓存，避免每次重绘都阻塞）
-    if (!_dnsTested) {
-        _dnsOk = WiFi.hostByName(CHAT_SERVER, _dnsResolved);
-        _dnsTested = true;
-        snprintf(_diag, sizeof(_diag), _dnsOk ? "DNS解析成功" : "DNS解析失败!");
-        Serial.printf("[chat] DNS解析: %s -> %s\n", CHAT_SERVER, _dnsOk ? _dnsResolved.toString().c_str() : "失败");
-    }
-    if (_dnsOk) {
-        snprintf(line, sizeof(line), "解析: %s OK", _dnsResolved.toString().c_str());
-    } else {
-        snprintf(line, sizeof(line), "解析: 失败!");
-    }
-    disp.drawText(4, y, line, 1);
-    y += 14;
-    
-    // 登录状态
+    // 登录结果（独立显示，不被 WS 事件覆盖）
     if (_loggedIn && _token[0]) {
         snprintf(line, sizeof(line), "登录: 成功");
     } else {
-        snprintf(line, sizeof(line), "登录: 未完成");
+        snprintf(line, sizeof(line), "登录: %s", _loginDiag[0] ? _loginDiag : "未开始");
     }
     disp.drawText(4, y, line, 1);
-    y += 14;
+    y += 16;
     
     // WebSocket 状态
     snprintf(line, sizeof(line), "WS: %s", _wsConnected ? "已连接" : "未连接");
     disp.drawText(4, y, line, 1);
-    y += 14;
+    y += 16;
     
-    // 诊断详情（登录失败原因 / WS 连接进展等）
-    disp.drawText(4, y, _diag[0] ? _diag : "等待中...", 1);
-    y += 14;
-    
-    // 剩余堆内存
-    snprintf(line, sizeof(line), "堆:%d B", ESP.getFreeHeap());
-    disp.drawText(4, y, line, 1);
+    // WS 事件详情（发送auth/收到hello/WS断开等）
+    disp.drawText(4, y, _diag[0] ? _diag : "等待...", 1);
     
     disp.drawStatusBar("长按2:进入会话列表", "Home:返回");
     disp.refresh(true);
@@ -1087,12 +1059,12 @@ void ChatManager::handleGroupMessage(JsonObject root) {
 
 bool ChatManager::login(const char* username, const char* password) {
     if (WiFi.status() != WL_CONNECTED) {
-        snprintf(_diag, sizeof(_diag), "登录失败: WiFi未连接");
+        snprintf(_loginDiag, sizeof(_loginDiag), "登录失败: WiFi未连接");
         Serial.println("[chat] login失败: WiFi未连接");
         return false;
     }
     Serial.printf("[chat] 开始登录, 账号=%s\n", username);
-    snprintf(_diag, sizeof(_diag), "正在登录...");
+    snprintf(_loginDiag, sizeof(_loginDiag), "正在登录...");
     unsigned long t0 = millis();
     WiFiClientSecure client;
     client.setFingerprint(chatSslFingerprint);
@@ -1123,22 +1095,22 @@ bool ChatManager::login(const char* username, const char* password) {
                 strncpy(_token, token, 63);
                 _loggedIn = true;
                 http.end();
-                snprintf(_diag, sizeof(_diag), "登录成功");
+                snprintf(_loginDiag, sizeof(_loginDiag), "登录成功");
                 Serial.println("[chat] 登录成功, token已获取");
                 return true;
             } else {
-                snprintf(_diag, sizeof(_diag), "登录失败: 无token");
+                snprintf(_loginDiag, sizeof(_loginDiag), "登录失败: 无token");
                 Serial.println("[chat] 登录失败: 响应无token");
             }
         } else {
-            snprintf(_diag, sizeof(_diag), "登录失败: JSON解析错");
+            snprintf(_loginDiag, sizeof(_loginDiag), "登录失败: JSON解析错");
             Serial.println("[chat] 登录失败: JSON解析失败");
         }
     } else {
         if (httpCode < 0) {
-            snprintf(_diag, sizeof(_diag), "TLS失败 HTTP=%d(%lus)", httpCode, elapsed);
+            snprintf(_loginDiag, sizeof(_loginDiag), "TLS失败 HTTP=%d(%lus)", httpCode, elapsed);
         } else {
-            snprintf(_diag, sizeof(_diag), "登录HTTP=%d(%lus)", httpCode, elapsed);
+            snprintf(_loginDiag, sizeof(_loginDiag), "登录HTTP=%d(%lus)", httpCode, elapsed);
         }
     }
     http.end();
