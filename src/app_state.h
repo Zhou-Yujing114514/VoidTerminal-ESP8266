@@ -53,4 +53,7 @@ private:
 
 extern AppStateManager app;
 
+// 上次重启原因（启动时由 setup 读取，供诊断屏显示）
+extern char g_resetInfo[96];
+
 #endif // APP_STATE_H
