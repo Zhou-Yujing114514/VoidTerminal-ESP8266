@@ -3,6 +3,8 @@
 
 AppStateManager app;
 
+char g_resetInfo[96] = "";
+
 const char* menuNames[MENU_COUNT] = {
     "虚空终端",
     "服务器监控",

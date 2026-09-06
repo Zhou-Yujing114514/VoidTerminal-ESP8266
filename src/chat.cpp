@@ -590,6 +590,13 @@ void ChatManager::drawConnecting() {
     
     // 诊断详情（登录失败原因 / WS 连接进展等）
     disp.drawText(4, y, _diag[0] ? _diag : "等待中...", 1);
+    y += 16;
+    
+    // 上次重启原因（非正常开机时显示，定位崩溃）
+    if (g_resetInfo[0] && strncmp(g_resetInfo, "Power On", 8) != 0) {
+        snprintf(line, sizeof(line), "重启:%s", g_resetInfo);
+        disp.drawText(4, y, line, 1);
+    }
     
     disp.drawStatusBar("长按2:进入会话列表", "Home:返回");
     disp.refresh(true);
@@ -1087,7 +1094,9 @@ bool ChatManager::login(const char* username, const char* password) {
     doc["password"] = password;
     String body;
     serializeJson(doc, body);
+    ESP.wdtDisable();  // 禁用软看门狗，避免 TLS 握手阻塞触发重启（HTTPClient 有20s超时兜底）
     int httpCode = http.POST(body);
+    ESP.wdtEnable(0);  // 恢复软看门狗
     unsigned long elapsed = (millis() - t0) / 1000;
     Serial.printf("[chat] 登录HTTP状态码: %d (耗时%lus)\n", httpCode, elapsed);
     if (httpCode == 200) {

@@ -21,6 +21,10 @@ void setup() {
     delay(100);
     Serial.println("\n\nVoidTerminal-ESP8266 启动中...");
     Serial.printf("版本: %s\n", FW_VERSION);
+    // 记录上次重启原因（供诊断屏显示，定位崩溃）
+    strncpy(g_resetInfo, ESP.getResetInfo().c_str(), sizeof(g_resetInfo) - 1);
+    g_resetInfo[sizeof(g_resetInfo) - 1] = 0;
+    Serial.printf("上次重启原因: %s\n", g_resetInfo);
     Serial.printf("屏幕引脚: CS=%d DC=%d RST=%d BUSY=%d\n", EPD_CS, EPD_DC, EPD_RST, EPD_BUSY);
     Serial.printf("按键引脚: MENU=%d UP=%d DOWN=%d\n", KEY_MENU, KEY_UP, KEY_DOWN);
     

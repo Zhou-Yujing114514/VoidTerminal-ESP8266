@@ -65,6 +65,11 @@ void MonitorManager::drawLoading() {
     disp.drawText(4, y, line, 1);
     y += 16;
     disp.drawText(4, y, _diag, 1);
+    y += 16;
+    if (g_resetInfo[0] && strncmp(g_resetInfo, "Power On", 8) != 0) {
+        snprintf(line, sizeof(line), "重启:%s", g_resetInfo);
+        disp.drawText(4, y, line, 1);
+    }
     disp.drawStatusBar("长按3:刷新  1:返回", "Home:返回");
     disp.refresh(true);
 }
