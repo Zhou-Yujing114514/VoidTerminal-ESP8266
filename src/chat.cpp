@@ -875,6 +875,8 @@ void ChatManager::connectWebSocket() {
     _webSocket.setExtraHeaders("Origin: https://buer.kdns.fr");
     _webSocket.onEvent(wsEventCallback);
     _webSocket.setReconnectInterval(5000);
+    // 心跳：每20秒发ping(服务器ws库自动回pong)，保持连接活跃避免idle断开
+    _webSocket.enableHeartbeat(20000, 10000, 3);
     _wsConnected = true;
 }
 

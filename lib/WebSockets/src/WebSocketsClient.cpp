@@ -263,6 +263,8 @@ void WebSocketsClient::loop(void) {
 #if defined(ESP8266) && defined(SSL_BARESSL)
             // TLS缓冲6KB：hello加密record约4.7KB，需大于此值；8KB会内存峰值爆堆崩溃
             _client.ssl->setBufferSizes(6144, 512);
+            // 增大读超时：服务器发完hello/presence后静默(>45s无消息)，默认15s会误断开
+            _client.ssl->setTimeout(120000);
 #endif
             _client.tcp = _client.ssl;
             if(_CA_cert) {
