@@ -1107,7 +1107,8 @@ bool ChatManager::login(const char* username, const char* password) {
         if (!deserializeJson(resp, payload)) {
             const char* token = resp["token"] | "";
             if (token[0]) {
-                strncpy(_token, token, 63);
+                strncpy(_token, token, sizeof(_token) - 1);
+                _token[sizeof(_token) - 1] = '\0';  // strncpy 不保证终止，防止超长 token 越界读
                 _loggedIn = true;
                 http.end();
                 snprintf(_loginDiag, sizeof(_loginDiag), "登录成功");

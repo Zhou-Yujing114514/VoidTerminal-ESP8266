@@ -8,7 +8,9 @@
 #include <SD.h>
 
 // ===== 版本信息 =====
-#define FW_VERSION "2.3.3"
+// 代码审查修复版：修复 token 拷贝未终止的潜在越界读；其余功能逻辑未改动。
+// 注：上一版本为 2.3.3，按语义化版本单调递增原则取 2.4.0，而非回退到 2.1.0。
+#define FW_VERSION "2.4.0"
 #define FW_NAME "VoidTerminal-ESP8266"
 
 // ===== 引脚配置 (A01 墨水屏 + ESP-12F) =====

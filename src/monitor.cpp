@@ -100,6 +100,9 @@ bool MonitorManager::fetchData(int serverIndex) {
     client.setTimeout(8000);
     HTTPClient http;
     http.setTimeout(8000);
+    // 说明：此处为监控探针（/api/status，仅返回在线状态/延迟等公开指标，
+    // 不含账号或 token），监控端口不提供 TLS，故保留明文 HTTP。
+    // 聊天主通道（见 chat.cpp）已走 WSS(443) + 证书指纹 pinning，不受影响。
     String url = String("http://") + getServerHost(serverIndex) + ":" + getServerPort(serverIndex) + "/api/status";
     snprintf(_diag, sizeof(_diag), "请求中...");
     Serial.printf("[mon] 请求: %s\n", url.c_str());
