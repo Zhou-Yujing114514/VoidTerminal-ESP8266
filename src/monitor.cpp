@@ -34,11 +34,12 @@ const char* MonitorManager::getServerName(int index) {
 }
 
 const char* MonitorManager::getServerHost(int index) {
-    return (index == 0) ? MONITOR_SERVER1 : MONITOR_SERVER2;
+    // 运行时配置（EEPROM），未配置返回空串
+    return wifiConfig.getMonitorHost(index);
 }
 
 int MonitorManager::getServerPort(int index) {
-    return (index == 0) ? MONITOR_PORT1 : MONITOR_PORT2;
+    return (int)wifiConfig.getMonitorPort(index);
 }
 
 void MonitorManager::drawLoading() {
@@ -88,6 +89,14 @@ void MonitorManager::drawError(const char* msg) {
 }
 
 bool MonitorManager::fetchData(int serverIndex) {
+    // 未在配网页配置监控主机时，直接标记为未配置，不发起请求
+    if (getServerHost(serverIndex)[0] == 0) {
+        strcpy(_data[serverIndex].status, "监控未配置");
+        _data[serverIndex].valid = false;
+        snprintf(_diag, sizeof(_diag), "请在配网页配置主机");
+        Serial.println("[mon] 监控主机未配置");
+        return false;
+    }
     if (WiFi.status() != WL_CONNECTED) {
         strcpy(_data[serverIndex].status, "WiFi未连接");
         _data[serverIndex].valid = false;
@@ -100,9 +109,11 @@ bool MonitorManager::fetchData(int serverIndex) {
     client.setTimeout(8000);
     HTTPClient http;
     http.setTimeout(8000);
-    // 说明：此处为监控探针（/api/status，仅返回在线状态/延迟等公开指标，
-    // 不含账号或 token），监控端口不提供 TLS，故保留明文 HTTP。
-    // 聊天主通道（见 chat.cpp）已走 WSS(443) + 证书指纹 pinning，不受影响。
+    // 说明：监控探针（/api/status）主机/端口已改为配网页运行时配置（EEPROM），
+    // 源码不再硬编码生产服务器地址。探针仅返回在线状态/延迟等公开指标，不含账号或 token。
+    // 安全提示（L19）：当前固件按明文 http:// 拼接 URL，监控端点不应直接暴露公网；
+    // 应仅在内网或加密隧道（WireGuard / frp TLS 等）中使用。聊天主通道（chat.cpp）
+    // 已走 WSS(443) + 证书指纹 pinning，不受影响。
     String url = String("http://") + getServerHost(serverIndex) + ":" + getServerPort(serverIndex) + "/api/status";
     snprintf(_diag, sizeof(_diag), "请求中...");
     Serial.printf("[mon] 请求: %s\n", url.c_str());

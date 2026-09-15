@@ -10,6 +10,18 @@ WifiConfigManager wifiConfig;
 // 聊天账号密码存储地址（预设占用 1 + 3*96 = 289 字节，从 289 开始）
 #define EEPROM_CHAT_USER_ADDR 289
 #define EEPROM_CHAT_PASS_ADDR (EEPROM_CHAT_USER_ADDR + CHAT_USERNAME_MAX)
+// 新增运行时敏感配置（聊天账号密码结束于 385，从 385 开始，总 EEPROM 512）
+#define EEPROM_AP_PASS_ADDR   385   // AP/Web/OTA 口令（首启随机生成），16 字节
+#define EEPROM_AP_PASS_LEN    16
+#define EEPROM_MON_HOST1_ADDR 401   // 监控服务器1 主机名，48 字节
+#define EEPROM_MON_HOST2_ADDR 449   // 监控服务器2 主机名，48 字节
+#define EEPROM_MON_HOST_LEN   48
+#define EEPROM_MON_PORT1_ADDR 497   // 监控服务器1 端口，uint16 低/高字节
+#define EEPROM_MON_PORT2_ADDR 499   // 监控服务器2 端口
+#define EEPROM_FLAGS_ADDR     501   // 标志位
+#define EEPROM_FLAG_AP_PASS_SET 0x01
+#define EEPROM_FLAG_MON1_SET    0x02
+#define EEPROM_FLAG_MON2_SET    0x04
 
 void WifiConfigManager::init() {
     _active = false;
@@ -151,6 +163,95 @@ bool WifiConfigManager::hasChatAccount() {
     char p[CHAT_PASSWORD_MAX];
     loadChatAccount(u, CHAT_USERNAME_MAX, p, CHAT_PASSWORD_MAX);
     return u[0] != 0 && p[0] != 0;
+}
+
+// 从 EEPROM 读定长字符串（以 0 或 0xFF 为终止），写入 out（最多 maxLen-1 字节）
+static void eepromReadString(int addr, char* out, size_t maxLen) {
+    out[0] = 0;
+    for (size_t i = 0; i + 1 < maxLen; i++) {
+        char c = (char)EEPROM.read(addr + i);
+        if (c == 0 || c == 0xFF) break;
+        out[i] = c;
+        out[i + 1] = 0;
+    }
+}
+
+// 把字符串写入 EEPROM 定长区域，尾部补 0
+static void eepromWriteString(int addr, const char* s, size_t maxLen) {
+    size_t i = 0;
+    if (s) {
+        for (; i + 1 < maxLen && s[i]; i++) {
+            EEPROM.write(addr + i, (uint8_t)s[i]);
+        }
+    }
+    EEPROM.write(addr + i, 0);
+    for (size_t j = i + 1; j < maxLen; j++) {
+        EEPROM.write(addr + j, 0);
+    }
+}
+
+// AP/Web/OTA 口令：首次上电生成随机口令（芯片ID + 硬件随机数），存 EEPROM。
+// 返回指向静态缓冲区的指针，调用方不必释放。
+const char* WifiConfigManager::getApPassword() {
+    static char buf[EEPROM_AP_PASS_LEN + 1];
+    uint8_t flags = EEPROM.read(EEPROM_FLAGS_ADDR);
+    if (!(flags & EEPROM_FLAG_AP_PASS_SET)) {
+        // 首次生成：8 位大小写字母+数字口令，避开易混淆字符
+        const char alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+        char gen[EEPROM_AP_PASS_LEN + 1];
+        uint32_t chipId = ESP.getChipId();
+        for (int i = 0; i < EEPROM_AP_PASS_LEN; i++) {
+            uint32_t r = (uint32_t)esp_random() ^ (chipId >> (i % 24));
+            gen[i] = alphabet[r % (sizeof(alphabet) - 1)];
+        }
+        gen[EEPROM_AP_PASS_LEN] = 0;
+        eepromWriteString(EEPROM_AP_PASS_ADDR, gen, EEPROM_AP_PASS_LEN);
+        EEPROM.write(EEPROM_FLAGS_ADDR, flags | EEPROM_FLAG_AP_PASS_SET);
+        EEPROM.commit();
+    }
+    eepromReadString(EEPROM_AP_PASS_ADDR, buf, sizeof(buf));
+    if (buf[0] == 0) {
+        // 极端情况：flag 置位但内容为空，退回空串（AP 将不加密，仅作兜底）
+        buf[0] = 0;
+    }
+    return buf;
+}
+
+// 监控服务器主机名（运行时配置，未配置返回空串）
+const char* WifiConfigManager::getMonitorHost(int idx) {
+    static char buf[EEPROM_MON_HOST_LEN + 1];
+    int addr = (idx == 0) ? EEPROM_MON_HOST1_ADDR : EEPROM_MON_HOST2_ADDR;
+    eepromReadString(addr, buf, sizeof(buf));
+    return buf;
+}
+
+// 监控服务器端口（运行时配置，未配置返回 0）
+uint16_t WifiConfigManager::getMonitorPort(int idx) {
+    int addr = (idx == 0) ? EEPROM_MON_PORT1_ADDR : EEPROM_MON_PORT2_ADDR;
+    uint16_t port = (uint16_t)EEPROM.read(addr) | ((uint16_t)EEPROM.read(addr + 1) << 8);
+    return port;
+}
+
+// 保存监控服务器配置；host 传空串表示清除该服务器配置
+bool WifiConfigManager::saveMonitorConfig(int idx, const char* host, uint16_t port) {
+    if (idx != 0 && idx != 1) return false;
+    int hostAddr = (idx == 0) ? EEPROM_MON_HOST1_ADDR : EEPROM_MON_HOST2_ADDR;
+    int portAddr = (idx == 0) ? EEPROM_MON_PORT1_ADDR : EEPROM_MON_PORT2_ADDR;
+    uint8_t flag = (idx == 0) ? EEPROM_FLAG_MON1_SET : EEPROM_FLAG_MON2_SET;
+
+    eepromWriteString(hostAddr, (host && host[0]) ? host : "", EEPROM_MON_HOST_LEN);
+    EEPROM.write(portAddr, (uint8_t)(port & 0xFF));
+    EEPROM.write(portAddr + 1, (uint8_t)((port >> 8) & 0xFF));
+
+    uint8_t flags = EEPROM.read(EEPROM_FLAGS_ADDR);
+    if (host && host[0]) {
+        flags |= flag;
+    } else {
+        flags &= ~flag;
+    }
+    EEPROM.write(EEPROM_FLAGS_ADDR, flags);
+    EEPROM.commit();
+    return true;
 }
 
 void WifiConfigManager::enter() {
@@ -335,7 +436,7 @@ void WifiConfigManager::drawApMode() {
     snprintf(line, sizeof(line), "热点名称: %s", AP_SSID);
     disp.drawText(10, 55, line, 1);
     
-    snprintf(line, sizeof(line), "密码: %s", AP_PASSWORD);
+    snprintf(line, sizeof(line), "密码: %s", getApPassword());
     disp.drawText(10, 70, line, 1);
     
     disp.drawText(10, 90, "请连接热点后访问:", 1);
@@ -354,7 +455,7 @@ void WifiConfigManager::startApMode() {
     if (_apMode) return;
     
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(AP_SSID, AP_PASSWORD);
+    WiFi.softAP(AP_SSID, getApPassword());
     
     _server = new ESP8266WebServer(80);
     _httpUpdater = new ESP8266HTTPUpdateServer();
@@ -397,7 +498,10 @@ void WifiConfigManager::setupWebServer() {
     
     // 保存聊天账号
     _server->on("/savechat", HTTP_POST, [this]() { handleChatAccountSave(); });
-    
+
+    // 保存监控服务器配置（运行时写入 EEPROM，不再硬编码）
+    _server->on("/savemonitor", HTTP_POST, [this]() { handleMonitorSave(); });
+
     // SD卡文件列表
     _server->on("/files", HTTP_GET, [this]() { handleFileList(); });
     
@@ -412,8 +516,8 @@ void WifiConfigManager::setupWebServer() {
     // 新建文件夹
     _server->on("/mkdir", HTTP_POST, [this]() { handleMkdir(); });
     
-    // OTA 更新
-    _httpUpdater->setup(_server, "/update", WEB_USER, WEB_PASS);
+    // OTA 更新（口令与 AP 口令相同，首启随机生成并在屏幕上显示）
+    _httpUpdater->setup(_server, "/update", WEB_USER, getApPassword());
 }
 
 void WifiConfigManager::handleRoot() {
@@ -460,7 +564,28 @@ void WifiConfigManager::handleRoot() {
     html += "<input type='submit' value='保存账号'>";
     html += "</form>";
     html += "<p>" + String(hasChatAccount() ? "已配置账号，聊天自动登录" : "未配置账号") + "</p>";
-    
+
+    // 监控服务器配置（运行时写入 EEPROM；留空则关闭该监控项）
+    // 安全提示：监控探针为 HTTP 明文，请仅在内网/加密隧道中使用，勿暴露公网。
+    html += "<h2>服务器监控配置</h2>";
+    char mh1[EEPROM_MON_HOST_LEN + 1];
+    char mh2[EEPROM_MON_HOST_LEN + 1];
+    eepromReadString(EEPROM_MON_HOST1_ADDR, mh1, sizeof(mh1));
+    eepromReadString(EEPROM_MON_HOST2_ADDR, mh2, sizeof(mh2));
+    html += "<form method='post' action='/savemonitor'>";
+    html += "<input type='hidden' name='index' value='0'>";
+    html += "监控1主机: <input type='text' name='host' value='" + String(mh1) + "'><br>";
+    html += "端口: <input type='text' name='port' value='" + String(getMonitorPort(0)) + "'><br>";
+    html += "<input type='submit' value='保存监控1'>";
+    html += "</form>";
+    html += "<form method='post' action='/savemonitor'>";
+    html += "<input type='hidden' name='index' value='1'>";
+    html += "监控2主机: <input type='text' name='host' value='" + String(mh2) + "'><br>";
+    html += "端口: <input type='text' name='port' value='" + String(getMonitorPort(1)) + "'><br>";
+    html += "<input type='submit' value='保存监控2'>";
+    html += "</form>";
+    html += "<p>主机留空可关闭对应监控项。</p>";
+
     // SD卡文件管理器
     html += "<h2>SD卡文件管理器</h2>";
     html += "<p><a href='/files'>查看文件列表</a></p>";
@@ -475,7 +600,9 @@ void WifiConfigManager::handleRoot() {
     
     // OTA
     html += "<h2>OTA 固件更新</h2>";
-    html += "<p><a href='/update'>进入 OTA 更新页面</a> (用户名: admin 密码: [REDACTED])</p>";
+    html += "<p><a href='/update'>进入 OTA 更新页面</a> (用户名: ";
+    html += WEB_USER;
+    html += " 密码: 首次上电随机生成，见设备屏幕配网界面)</p>";
     
     html += "</body></html>";
     _server->send(200, "text/html", html);
@@ -534,6 +661,27 @@ void WifiConfigManager::handleChatAccountSave() {
     } else {
         _server->send(400, "text/plain", "参数错误");
     }
+}
+
+void WifiConfigManager::handleMonitorSave() {
+    if (!_server->hasArg("index") || !_server->hasArg("host")) {
+        _server->send(400, "text/plain", "参数错误");
+        return;
+    }
+    int index = _server->arg("index").toInt();
+    if (index != 0 && index != 1) {
+        _server->send(400, "text/plain", "index 必须为 0 或 1");
+        return;
+    }
+    String host = _server->arg("host");
+    uint16_t port = (uint16_t)_server->arg("port").toInt();
+    // 简单校验：主机名不允许包含 http:// 前缀或空格，避免被拼进 URL 后越权
+    if (host.indexOf("://") >= 0 || host.indexOf(' ') >= 0) {
+        _server->send(400, "text/plain", "主机名不要带 http(s):// 前缀，也不要含空格");
+        return;
+    }
+    saveMonitorConfig(index, host.c_str(), port);
+    _server->send(200, "text/plain", "监控配置已保存");
 }
 
 void WifiConfigManager::handleFileList() {

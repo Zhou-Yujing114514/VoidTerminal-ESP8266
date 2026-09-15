@@ -32,20 +32,25 @@
 #define CHAT_PORT 443          // HTTPS 端口（80端口已被服务器关闭）
 // 服务器 TLS 证书 SHA1 指纹（十六进制），用于 beginSSL 与 setFingerprint
 #define CHAT_SSL_FINGERPRINT_HEX "1C:86:71:D8:C7:8C:C4:BA:58:43:B6:12:FF:36:4E:63:7E:51:FA:E1"
-#define MONITOR_SERVER1 "[REDACTED]"
-#define MONITOR_PORT1 51808
+// 监控服务器地址/端口：不再在源码中硬编码生产基础设施信息。
+// 出厂默认为空（监控功能默认关闭），首次使用通过配网网页写入 EEPROM 运行时配置。
+// 安全说明：监控探针为 HTTP 明文，仅应在内网/加密隧道（如 WireGuard/frp TLS 隧道）中使用，
+// 不要把公网可达的监控端点直接暴露在固件中。
+#define MONITOR_SERVER1 ""
+#define MONITOR_PORT1 0
 #define MONITOR_NAME1 "聊天站"
-#define MONITOR_SERVER2 "[REDACTED]"
-#define MONITOR_PORT2 51809
+#define MONITOR_SERVER2 ""
+#define MONITOR_PORT2 0
 #define MONITOR_NAME2 "小说站"
 #define MONITOR_PARTIAL_REFRESH_MS 1000
 #define MONITOR_FULL_REFRESH_MS 10000
 
 // ===== 配网配置 =====
+// AP 口令与 Web 配网/OTA 口令：不再硬编码。
+// 首次上电时由设备用芯片ID+硬件随机数生成，写入 EEPROM，并在墨水屏配网界面上显示。
+// AP_SSID 为非敏感广播名，保留；WEB_USER 为 OTA 用户名，非敏感，保留。
 #define AP_SSID "CMCC-Admin"
-#define AP_PASSWORD "[REDACTED]"
 #define WEB_USER "admin"
-#define WEB_PASS "[REDACTED]"
 #define MAX_WIFI_PRESETS 3
 
 // ===== 存储配置 =====

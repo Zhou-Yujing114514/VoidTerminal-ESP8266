@@ -4,8 +4,8 @@
 .piolibdeps/
 libdeps/
 *.elf
+# 固件二进制一律不入库，改由 GitHub Release 附件分发（M14）
 *.bin
-!VoidTerminal-ESP8266_*.bin
 
 # Build artifacts
 build/
