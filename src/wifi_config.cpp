@@ -1,6 +1,5 @@
 #include "wifi_config.h"
 #include <string.h>
-#include <esp_system.h>  // esp_random（AP 口令生成）
 
 WifiConfigManager wifiConfig;
 
@@ -195,7 +194,7 @@ const char* WifiConfigManager::getApPassword() {
         char gen[EEPROM_AP_PASS_LEN + 1];
         uint32_t chipId = ESP.getChipId();
         for (int i = 0; i < EEPROM_AP_PASS_LEN; i++) {
-            uint32_t r = (uint32_t)esp_random() ^ (chipId >> (i % 24));
+            uint32_t r = (uint32_t)os_random() ^ (chipId >> (i % 24));
             gen[i] = alphabet[r % (sizeof(alphabet) - 1)];
         }
         gen[EEPROM_AP_PASS_LEN] = 0;
