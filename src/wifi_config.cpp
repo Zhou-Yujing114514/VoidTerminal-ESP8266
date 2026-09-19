@@ -1,5 +1,6 @@
 #include "wifi_config.h"
 #include <string.h>
+#include <esp_system.h>  // esp_random（AP 口令生成）
 
 WifiConfigManager wifiConfig;
 
