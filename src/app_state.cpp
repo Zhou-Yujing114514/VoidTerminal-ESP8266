@@ -7,8 +7,6 @@ char g_resetInfo[96] = "";
 
 const char* menuNames[MENU_COUNT] = {
     "虚空终端",
-    "服务器监控",
-    "时钟",
     "配网设置"
 };
 
@@ -59,30 +57,31 @@ void AppStateManager::drawMenu() {
     disp.clear();
     disp.drawTitleBar("虚空终端 OS");
     
-    // 2x2 网格菜单（4个菜单项）
-    int itemW = SCREEN_W / 2;
-    int itemH = (SCREEN_H - 16 - 12) / 2;
+    // 竖排大卡片菜单（2 项）
+    int cardX = 12;
+    int cardW = SCREEN_W - 24;
+    int cardH = 42;
+    int gap = 12;
+    int startY = 26;
     
     for (int i = 0; i < MENU_COUNT; i++) {
-        int col = i % 2;
-        int row = i / 2;
-        int x = col * itemW;
-        int y = 16 + row * itemH;
-        
+        int y = startY + i * (cardH + gap);
         bool selected = (i == _menuIndex);
         
         if (selected) {
-            disp.drawRect(x + 2, y + 2, itemW - 4, itemH - 4, true);
+            disp.drawRect(cardX, y, cardW, cardH, true);
             // 反白文字（注意：u8g2Fonts 不受 display.setTextColor 影响，必须用 setForegroundColor）
             u8g2Fonts.setForegroundColor(GxEPD_WHITE);
             u8g2Fonts.setBackgroundColor(GxEPD_BLACK);
         } else {
-            disp.drawRect(x + 2, y + 2, itemW - 4, itemH - 4, false);
+            disp.drawRect(cardX, y, cardW, cardH, false);
         }
         
-        // 菜单名称居中
-        int textW = disp.getTextWidth(menuNames[i]);
-        disp.drawText(x + (itemW - textW) / 2, y + itemH / 2 - 4, menuNames[i], 1);
+        // 图标（选中项显示 > 指示箭头）+ 菜单名称居中
+        char label[24];
+        snprintf(label, sizeof(label), "%s%s", selected ? "> " : "  ", menuNames[i]);
+        int textW = disp.getTextWidth(label);
+        disp.drawText(cardX + (cardW - textW) / 2, y + cardH / 2 - 4, label, 1);
         
         if (selected) {
             u8g2Fonts.setForegroundColor(GxEPD_BLACK);
@@ -90,7 +89,11 @@ void AppStateManager::drawMenu() {
         }
     }
     
-    disp.drawStatusBar("上/下:选择  确认:长按下", "Home:菜单键");
+    // 底部状态栏：版本 + WiFi 状态
+    char status[40];
+    snprintf(status, sizeof(status), "v%s  %s", FW_VERSION,
+             wifiConfig.isWifiConnected() ? "WiFi:已连接" : "WiFi:未连接");
+    disp.drawStatusBar(status, "上/下:选择 长按:确认");
     disp.refresh(true);
 }
 
@@ -125,12 +128,6 @@ void AppStateManager::handleKey(KeyEvent evt) {
                 switch (_menuIndex) {
                     case MENU_CHAT:
                         enterOrSelectWifi(STATE_CHAT);
-                        break;
-                    case MENU_MONITOR:
-                        enterOrSelectWifi(STATE_MONITOR);
-                        break;
-                    case MENU_CLOCK:
-                        enterOrSelectWifi(STATE_CLOCK);
                         break;
                     case MENU_CONFIG:
                         setState(STATE_CONFIG);

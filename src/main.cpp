@@ -2,7 +2,7 @@
  * VoidTerminal-ESP8266 - 虚空终端 ESP8266 自研操作系统
  * 硬件: ESP-12F / 4MB Flash / DIO / 80MHz
  * 屏幕: 2.9寸 A01 墨水屏 (296x128)
- * 功能: 虚空终端聊天(九宫格输入法)、服务器监控、时钟、配网系统
+ * 功能: 虚空终端聊天(九宫格输入法)、配网系统
  */
 
 #include "config.h"
@@ -10,8 +10,6 @@
 #include "input.h"
 #include "app_state.h"
 #include "chat.h"
-#include "monitor.h"
-#include "clock.h"
 #include "wifi_config.h"
 
 // 全局对象 display 和 u8g2Fonts 在 display.cpp 中定义
@@ -41,8 +39,6 @@ void setup() {
     input.init();
     app.init();
     chat.init();
-    monitor.init();
-    clockMgr.init();
     wifiConfig.init();
     
     // 再次打印 RAM（初始化后）
@@ -78,16 +74,6 @@ void loop() {
             chat.update();
             break;
             
-        case STATE_MONITOR:
-            monitor.handleKey(evt);
-            monitor.update();
-            break;
-            
-        case STATE_CLOCK:
-            clockMgr.handleKey(evt);
-            clockMgr.update();
-            break;
-            
         case STATE_CONFIG:
             wifiConfig.handleKey(evt);
             wifiConfig.update();
@@ -111,8 +97,6 @@ void loop() {
         // 退出旧状态
         switch (state) {
             case STATE_CHAT: chat.exit(); break;
-            case STATE_MONITOR: monitor.exit(); break;
-            case STATE_CLOCK: clockMgr.exit(); break;
             case STATE_CONFIG: wifiConfig.exit(); break;
             default: break;
         }
@@ -120,8 +104,6 @@ void loop() {
         // 进入新状态
         switch (newState) {
             case STATE_CHAT: chat.enter(); break;
-            case STATE_MONITOR: monitor.enter(); break;
-            case STATE_CLOCK: clockMgr.enter(); break;
             case STATE_CONFIG: wifiConfig.enter(); break;
             case STATE_WIFI_SELECT: wifiConfig.enterWifiSelect(); break;
             default: break;

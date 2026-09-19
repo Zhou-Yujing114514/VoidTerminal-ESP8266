@@ -10,8 +10,6 @@ enum AppState {
     STATE_BOOT = 0,
     STATE_MENU,         // 主菜单
     STATE_CHAT,         // 虚空终端聊天
-    STATE_MONITOR,      // 服务器监控
-    STATE_CLOCK,        // 时钟
     STATE_CONFIG,       // 配网设置
     STATE_WIFI_SELECT,  // WiFi 选择（打开工具前自动弹出）
     STATE_SHUTDOWN      // 关机/休眠
@@ -20,8 +18,6 @@ enum AppState {
 // 主菜单项目
 enum MenuItem {
     MENU_CHAT = 0,
-    MENU_MONITOR,
-    MENU_CLOCK,
     MENU_CONFIG,
     MENU_COUNT
 };

@@ -42,11 +42,6 @@ public:
 
     // AP/Web/OTA 口令：首次上电随机生成并存入 EEPROM，返回当前口令（静态缓冲区）
     const char* getApPassword();
-    // 监控服务器运行时配置（存 EEPROM；未配置返回空串/0）
-    const char* getMonitorHost(int idx);
-    uint16_t getMonitorPort(int idx);
-    bool saveMonitorConfig(int idx, const char* host, uint16_t port);
-    
 private:
     bool _active;
     bool _apMode;
@@ -68,7 +63,6 @@ private:
     void handleWifiSave();
     void handlePresetSave();
     void handleChatAccountSave();
-    void handleMonitorSave();
     void handleFileList();
     void handleFileUpload();
     void handleFileDelete();
