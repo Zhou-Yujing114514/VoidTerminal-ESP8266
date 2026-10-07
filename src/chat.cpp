@@ -872,7 +872,7 @@ void ChatManager::connectWebSocket() {
     }
     _webSocket.beginSSL(CHAT_SERVER, CHAT_PORT, "/ws", chatSslFingerprint);
     // 覆盖库默认的 "Origin: file://"，服务器 verifyClient 会拒绝非本站 Origin
-    _webSocket.setExtraHeaders("Origin: https://buer.kdns.fr");
+    _webSocket.setExtraHeaders("Origin: https://buer.sswwgzs.cn");
     _webSocket.onEvent(wsEventCallback);
     _webSocket.setReconnectInterval(5000);
     // 心跳：每20秒发ping(服务器ws库自动回pong)，保持连接活跃避免idle断开
